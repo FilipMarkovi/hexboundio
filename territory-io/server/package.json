@@ -1,0 +1,19 @@
+
+{
+  "name": "territory-io-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12"
+  }
+}
