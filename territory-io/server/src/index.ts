@@ -11,13 +11,18 @@ import {
   PlayerId,
   handlePlayerDeath,
   CoreGameState,
+  PLAYER_COLORS,
+  setPlayer,
   STARTING_GOLD, STARTING_ARMY,
   type WireState
 } from "../../shared";
 import { initMap } from "./init/initMap";
 import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
-import { handleJoinQueue } from "./util/joinQueue.js";
+import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
+import { runBots } from "./ai/botManager";
+import { handleQueueBots } from "./ai/queueBotManager";
 
+const SERVER_PASSWORD = "jjmother";
 
 type ClientMsg =
   | { type: "INTENT"; intent: any };
@@ -27,155 +32,255 @@ export type ServerMsg =
   | { type: "LOBBY"; connected: number; required: number }
   | { type: "STATE"; state: WireState };
 
+const rooms = new Map<RoomId, GameRoom>();
+let queueRoomId: RoomId;
+const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
 const sockets = new Map<PlayerId, WebSocket>();
-const map = MAPS.butterfly;
-export const REQUIRED_PLAYERS = Array.from(map.hqSpawns).length;
+
 const PORT = 3001;
 const wss = new WebSocketServer({ port: PORT });
-const state = createGameState();
 let last = Date.now();
 let reset = true;
+;
+const first = createRoom(rooms);
+queueRoomId = first.id;
 
-export function broadcast(msg: ServerMsg) {
-  const data = JSON.stringify(msg);
-  for (const ws of wss.clients) {
-    if (ws.readyState === 1) ws.send(data);
+function getQueueRoom(): GameRoom {
+  let room = rooms.get(queueRoomId);
+  if (!room) {
+    room = createRoom(rooms);
+    queueRoomId = room.id;
   }
+  return room;
 }
 
-export function resetGame(state: CoreGameState) {
-  // Reset match flags
-  state.started = false;
-  state.gameOver = null;
-
-  // Clear tiles
-  state.tiles.clear();
-
-  // Reset players
-  for (const p of state.players.values()) {
-    p.status = "LOBBY";      // or "CONNECTED"
-    p.eliminated = false;
-    p.gold = STARTING_GOLD;
-    p.army = STARTING_ARMY;
-    p.hqPos = { q: 0, r: 0 };
-  }
-
-  // Clear caches
-  state.connectedCache = new Map();
-  reset = true
+function queuedCount(room: GameRoom) {
+  return [...room.state.players.values()].filter(p => p.status === "QUEUED").length;
 }
 
-export function startMatchIfReady() {
-  if (state.started) return;
-  const queued = [...state.players.values()]
-  .filter(p => p.status === "QUEUED");
-
-  if (queued.length < REQUIRED_PLAYERS) return;
-
-  for (const p of queued) {
-    p.status = "PLAYING";
-  }
-
-  initMap(state, map);
-  spawnPlayersFromMap(state, map);
-
-  state.started = true;
-  broadcast({ type: "STATE", state: serializeState(state) });
-}
-
-// SERVER TICK LOOP
-setInterval(() => {
-  checkAFKPlayers(state, Date.now(), (id) => {
-    const ws = sockets.get(id);
-    if (ws && ws.readyState === ws.OPEN) ws.close();
-    sockets.delete(id);
-    console.log("Player with id ", id, " disconneted!")
+export function broadcastLobby() {
+  const room = getQueueRoom();
+  const msg = JSON.stringify({
+    type: "LOBBY",
+    connected: queuedCount(room),
+    required: room.maxPlayers
   });
 
-  if (!state.started) return;
+  for (const ws of sockets.values()) {
+    if (ws.readyState === ws.OPEN) ws.send(msg);
+  }
+}
 
-  const now = Date.now();
+function handleJoinQueue(playerId: PlayerId, username: string) {
+  // Already in a room? ignore (or allow leaving later)
+  if (playerRoom.has(playerId)) return;
 
-  //  FINAL STATE BROADCAST
-  if (state.gameOver) {
-    if(reset){
-      reset = false
-      broadcast({ type: "STATE", state: serializeState(state) });
+  const room = getQueueRoom();
 
-      setTimeout(() => {
-        resetGame(state);
-        
-        broadcast({ type: "STATE", state: serializeState(state) });
-        broadcast({
-          type: "LOBBY",
-          connected: 0,
-          required: REQUIRED_PLAYERS
-        });
+  // Add player to this room’s state
+  const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
 
-      }, 5000); // give players time to see winner
+  setPlayer(room.state, {
+    id: playerId,
+    username,
+    color,
+    status: "QUEUED",
+    gold: STARTING_GOLD,
+    army: STARTING_ARMY,
+    eliminated: false,
+    hqPos: { q: 0, r: 0 },
+    lastSeen: Date.now(),
+  });
+
+  room.playerIds.add(playerId);
+  playerRoom.set(playerId, room.id);
+
+  broadcastLobby();
+  handleQueueBots(room, playerRoom);
+  startMatchIfReady(room);
+}
+
+function broadcastRoom(room: GameRoom, msg: ServerMsg) {
+  const data = JSON.stringify(msg);
+  for (const pid of room.playerIds) {
+    const ws = sockets.get(pid);
+    if (ws && ws.readyState === ws.OPEN) ws.send(data);
+  }
+}
+
+function broadcastRoomState(room: GameRoom) {
+  broadcastRoom(room, { type: "STATE", state: serializeState(room.state) });
+}
+
+function destroyRoomSoon(roomId: RoomId) {
+  const room = rooms.get(roomId);
+  if (!room || room.closing) return;
+  room.closing = true;
+
+  setTimeout(() => {
+    const r = rooms.get(roomId);
+    if (!r) return;
+
+    // Return all its players to lobby (not queued, just free to click Play again)
+    for (const pid of r.playerIds) {
+      playerRoom.delete(pid);
+      // Optional: tell client “you are in lobby now” via LOBBY message already
+      // (clients also stop receiving STATE since room is gone)
     }
-    return;
+
+    rooms.delete(roomId);
+
+    // Everyone sees the lobby count for current queue room
+    broadcastLobby();
+  }, 5000); // allow winner screen for 5s
+}
+
+export function startMatchIfReady(room: GameRoom) {
+  if (room.state.started) return;
+
+  const queued = [...room.state.players.values()].filter(p => p.status === "QUEUED");
+  if (queued.length < room.maxPlayers) return;
+
+  // Move queued -> playing
+  for (const p of queued) p.status = "PLAYING";
+
+  const map = MAPS.get(room.mapId);
+  if (!map) {
+    throw new Error(`Map not found at match start: ${room.mapId}`);
   }
 
-  const dt = (now - last) / 1000;
-  last = now;
+  // Init map + spawns inside this room’s state
+  initMap(room.state, map);
+  spawnPlayersFromMap(room.state, map);
 
-  tick(state, dt);
-  broadcast({ type: "STATE", state: serializeState(state) });
+  room.state.started = true;
+  room.lastTickMs = Date.now();
+
+  broadcastRoomState(room);
+
+  // mmediately create a new queue room (fresh lobby target)
+  const newRoom = createRoom(rooms);
+  queueRoomId = newRoom.id;
+
+  broadcastLobby();
+}
+
+let bot_tick = 9;
+// SERVER TICK LOOP
+setInterval(() => {
+  const now = Date.now();
+  bot_tick = (bot_tick + 1) % 10
+  for (const room of rooms.values()) {
+    if (!room.state.started) continue;
+    if (room.closing) continue;
+
+    // Game over handling
+    if (room.state.gameOver) {
+      broadcastRoomState(room);
+      destroyRoomSoon(room.id);
+      continue;
+    }
+
+    const dt = (now - room.lastTickMs) / 1000;
+    room.lastTickMs = now;
+    if (bot_tick == 0)
+      runBots(room);
+    tick(room.state, dt);
+    broadcastRoomState(room);
+  }
+  //console.log("tick time: ",Date.now() - now)
 }, 100);
  
 
 wss.on("connection", (ws, req) => {
+  //PASSWORD CHECK
+  const url = new URL(req.url || "", `http://${req.headers.host}`);
+  const password = url.searchParams.get("password");
+
+  // 2. Reject the connection if the password doesn't match
+  if (password !== SERVER_PASSWORD) {
+    console.log("Rejected connection: Invalid password");
+    ws.close(4000, "Invalid password"); 
+    return;
+  }
+
   const playerId = crypto.randomUUID();
   sockets.set(playerId, ws);
-
-  ws.send(JSON.stringify({ type: "WELCOME", playerId, requiredPlayers: REQUIRED_PLAYERS } satisfies ServerMsg));
+  const room = getQueueRoom()
+  ws.send(JSON.stringify({ type: "WELCOME", playerId, requiredPlayers: room.maxPlayers } satisfies ServerMsg));
   ws.send(JSON.stringify({
     type: "LOBBY",
-    connected: [...state.players.values()].filter(p => p.status === "QUEUED").length,
-    required: REQUIRED_PLAYERS
+    connected: queuedCount(getQueueRoom()),
+    required: room.maxPlayers
   }));
 
   ws.on("message", (buf) => {
     let msg: ClientMsg | null = null;
     try { msg = JSON.parse(buf.toString()); } catch { return; }
-    if (!msg) return;
-    if (!msg || msg.type !== "INTENT" || !msg.intent) return;
+    if (!msg || msg.type !== "INTENT") return;
 
-    if (msg.intent.type === "JOIN_QUEUE") {
-      handleJoinQueue(state, playerId, msg.intent.username)
+    const intent = msg.intent;
+
+    if (intent.type === "JOIN_QUEUE") {
+      handleJoinQueue(playerId, intent.username);
       return;
     }
 
-    if (msg.intent.type === "PING") {
-      const player = state.players.get(playerId);
-      if (player) {
-        player.lastSeen = Date.now();
-      }
+    if (intent.type === "PING") {
+      const rid = playerRoom.get(playerId);
+      if (!rid) return;
+      const room = rooms.get(rid);
+      if (!room) return;
+      const p = room.state.players.get(playerId);
+      if (p) p.lastSeen = Date.now();
       return;
     }
 
-    applyIntent(state, playerId, msg.intent);
-  
+    // Gameplay intents only if player is in a room
+    const rid = playerRoom.get(playerId);
+    if (!rid) return;
+
+    const room = rooms.get(rid);
+    if (!room) return;
+
+    applyIntent(room.state, playerId, intent);
   });
 
   ws.on("close", () => {
-    const player = state.players.get(playerId);
-
-    if (player && !state.started) {
-      state.players.delete(playerId);
-    } else if (player) {
-      handlePlayerDeath(state,playerId)
-    }
-
     sockets.delete(playerId);
 
-    broadcast({
-      type: "LOBBY",
-      connected: [...state.players.values()]
-        .filter(p => p.status === "QUEUED").length,
-      required: REQUIRED_PLAYERS
-    });
+    const rid = playerRoom.get(playerId);
+    if (!rid) {
+      broadcastLobby();
+      return;
+    }
+
+    const room = rooms.get(rid);
+    if (!room) {
+      playerRoom.delete(playerId);
+      broadcastLobby();
+      return;
+    }
+
+    const player = room.state.players.get(playerId);
+
+    if (player?.status === "PLAYING") {
+      // Treat disconnect as defeat
+      handlePlayerDeath(room.state, playerId);
+    }
+
+    // Remove player bookkeeping
+    room.playerIds.delete(playerId);
+    room.state.players.delete(playerId);
+    playerRoom.delete(playerId);
+
+    // Update lobby if needed
+    if (rid === queueRoomId) broadcastLobby();
+
+    // Cleanup empty running games
+    if (room.state.started && room.playerIds.size === 0) {
+      rooms.delete(rid);
+    }
   });
 
 });

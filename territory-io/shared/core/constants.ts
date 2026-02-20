@@ -59,3 +59,43 @@ export const HEX_DIRECTIONS = [
   { q: 0, r: 1 }
 ];
 
+
+// AI
+export const PIVOT_DIST = 4; // comform zone - higher pivot = ai want to maintain bigger base
+export const STEEPNESS = 1.6; // impactfullness of distance - higher steepness = ai cares more about close tiles then further ones
+export const TIME_TO_AI_AUTOFILL = 5000; // in ms
+
+// preset names for players and bots
+export const GAMER_NAMES: string[] = [
+  // --- COMPETITIVE / SWEATY ---
+  "ShadowByte", "PixelKnight", "CyberMage", "NeonReaper", "VoidWalker",
+  "AlphaZen", "RoguePulse", "IronGlimpse", "FrostWarden", "ZenithZero",
+  "SolarFlare", "LunaStatic", "StormViper", "EchoSlayer", "TitanCore",
+  "GlitchMaster", "RiftRunner", "NovaStrike", "CobaltRush", "AeroGhost",
+  "VortexVandal", "HyperNova", "WildCard", "ApexPredator", "SilentScope",
+  "FatalError", "GhostProtocol", "OmegaShift", "PrimalFury", "VectorVelocity",
+  
+  // --- CASUAL / FUN ---
+  "MysticPanda", "GrimFable", "SleepySloth", "AngryBirdie", "DogeLord", 
+  "LofiVibes", "PizzaThief", "BobaFettuccine", "TacoTuesday", "CerealKiller",
+  "DuckingGoose", "MarshmallowMadness", "PoptartPower", "BubbleTeaBot", "SofaHero",
+  "LaundryDay", "WiFiWarrior", "Buffered", "LowBattery", "LaggyLarry",
+  "ButtonMasher", "JoystickJunkie", "RespawnRepeat", "NoobSlayer99", "LeetSpoke",
+
+  // --- DARK / EDGY ---
+  "AbyssWatcher", "DoomSpiral", "NightCrawler", "SoulFragment", "BloodMoon",
+  "HollowPoint", "CursedRelic", "ShadowPhaze", "WraithKing", "PhantomEdge",
+  "NecroDancer", "DarkMatter", "EclipseEnd", "BoneCollector", "VenomSting",
+  "ChaosTheory", "Oblivion", "GrimRevolt", "SkullBash", "TerrorByte",
+
+  // --- SCI-FI / TECH ---
+  "CircuitBreaker", "DataStream", "BinaryBeast", "NeuralNetwork", "NanoBlade",
+  "PlasmaPulse", "SiliconSoul", "MacroWave", "BitCrusher", "LogicGate",
+  "KernelPanic", "SynapseSnap", "OverClocked", "Mainframe", "CyberDrone",
+  "StaticShock", "Voltage", "GridRunner", "BitShifter", "FireWall",
+
+  // --- ELEMENTS / NATURE ---
+  "MagmaMelt", "ArcticFox", "TerraForm", "CloudNine", "ThunderBolt",
+  "DeepCurrent", "SolarWind", "AshFall", "QuakeMaker", "SkyBound",
+  "WildFire", "FrostBite", "StoneCold", "MistWalker", "StarGazer"
+];

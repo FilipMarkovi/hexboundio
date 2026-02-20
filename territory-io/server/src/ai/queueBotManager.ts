@@ -1,0 +1,73 @@
+// server/ai/queueBotManager.ts
+
+import crypto from "node:crypto";
+import type { GameRoom } from "../util/rooms";
+import {
+  setPlayer,
+  PLAYER_COLORS,
+  STARTING_GOLD,
+  STARTING_ARMY,
+  getRandomNames,
+  TIME_TO_AI_AUTOFILL,
+} from "../../../shared";
+import { broadcastLobby,startMatchIfReady } from "../index.js";
+import { start } from "node:repl";
+
+const queueTimers = new Map<string, NodeJS.Timeout>();
+
+export function handleQueueBots(
+  room: GameRoom,
+  playerRoom: Map<string, string>
+) {
+  const queuedPlayers = [...room.state.players.values()].filter(
+    p => p.status === "QUEUED" && !p.isBot
+  );
+
+  // If first human joined empty queue
+  if (queuedPlayers.length === 1 && room.state.players.size === 1) {
+    if (queueTimers.has(room.id)) return;
+
+    const timer = setTimeout(() => {
+      fillRoomWithBots(room, playerRoom);
+      queueTimers.delete(room.id);
+    }, TIME_TO_AI_AUTOFILL);
+
+    queueTimers.set(room.id, timer);
+  }
+}
+
+function fillRoomWithBots(
+  room: GameRoom,
+  playerRoom: Map<string, string>
+) {
+  const bot_count = room.maxPlayers - room.state.players.size
+  const names = getRandomNames(bot_count)
+  let i = 0
+  while (room.state.players.size < room.maxPlayers) {
+    const botId = `bot_${crypto.randomUUID()}`;
+
+    const color =
+      PLAYER_COLORS[
+        room.state.players.size % PLAYER_COLORS.length
+      ];
+
+    setPlayer(room.state, {
+      id: botId,
+      username: names[i],
+      color,
+      status: "QUEUED",
+      gold: STARTING_GOLD,
+      army: STARTING_ARMY,
+      eliminated: false,
+      hqPos: { q: 0, r: 0 },
+      lastSeen: Date.now(),
+      isBot: true,
+    });
+    i++;
+
+    room.playerIds.add(botId);
+    playerRoom.set(botId, room.id);
+  }
+  broadcastLobby()
+  startMatchIfReady(room)
+}

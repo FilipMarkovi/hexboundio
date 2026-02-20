@@ -1,83 +1,118 @@
 import { clientNetState, clientUIState } from "../state/clientState";
 
-let root: HTMLDivElement | null = null;
+let lobbyRoot: HTMLDivElement;
+let returnRoot: HTMLDivElement;
+
+let playBtn: HTMLButtonElement;
+let inputEl: HTMLInputElement;
+let statusEl: HTMLDivElement;
 
 export function initLobbyUI(sendIntent: (intent: any) => void) {
-  root = document.createElement("div");
-  root.style.position = "absolute";
-  root.style.inset = "0";
-  root.style.display = "flex";
-  root.style.flexDirection = "column";
-  root.style.alignItems = "center";
-  root.style.justifyContent = "center";
-  root.style.gap = "12px";
-  root.style.background = "rgba(0,0,0,0.65)";
-  root.style.color = "white";
-  root.style.zIndex = "50";
+  /* ================= LOBBY OVERLAY ================= */
+  lobbyRoot = document.createElement("div");
+  lobbyRoot.style.position = "absolute";
+  lobbyRoot.style.inset = "0";
+  lobbyRoot.style.display = "flex";
+  lobbyRoot.style.flexDirection = "column";
+  lobbyRoot.style.alignItems = "center";
+  lobbyRoot.style.justifyContent = "center";
+  lobbyRoot.style.gap = "12px";
+  lobbyRoot.style.background = "rgba(0,0,0,0.7)";
+  lobbyRoot.style.color = "white";
+  lobbyRoot.style.zIndex = "50";
 
-  root.innerHTML = `
-    <div style="font: 700 28px system-ui;">Hex Game</div>
-    <input id="name" placeholder="username"
+  lobbyRoot.innerHTML = `
+    <div style="font:700 28px system-ui;">Hex Game</div>
+
+    <input id="name"
+      placeholder="username"
       style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:#0f172a;color:white;min-width:240px;" />
+
     <button id="play"
       style="padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:#1f2937;color:white;cursor:pointer;min-width:240px;">
       Play
     </button>
-    <div id="status" style="opacity:0.9;font: 14px system-ui;"></div>
+
+    <div id="status" style="opacity:0.9;font:14px system-ui;"></div>
   `;
 
-  document.body.appendChild(root);
+  document.body.appendChild(lobbyRoot);
 
-  const btn = root.querySelector("#play") as HTMLButtonElement;
-  const input = root.querySelector("#name") as HTMLInputElement;
-  const status = root.querySelector("#status") as HTMLDivElement;
+  playBtn = lobbyRoot.querySelector("#play")!;
+  inputEl = lobbyRoot.querySelector("#name")!;
+  statusEl = lobbyRoot.querySelector("#status")!;
 
-  btn.onclick = () => {
-    const name = input.value.trim();
+  playBtn.onclick = () => {
+    const name = inputEl.value.trim();
     if (!name) return;
+
     clientUIState.username = name;
     clientUIState.phase = "QUEUED";
-    btn.disabled = true;
-    btn.style.opacity = "0.6";
-    btn.style.cursor = "default";
+
+    playBtn.disabled = true;
+    playBtn.style.opacity = "0.6";
+
     sendIntent({ type: "JOIN_QUEUE", username: name });
-    status.textContent = "Queued…";
   };
+
+  /* ================= RETURN BUTTON ================= */
+  returnRoot = document.createElement("div");
+  returnRoot.style.position = "absolute";
+  returnRoot.style.left = "50%";
+  returnRoot.style.top = "20%"; // 👈 slightly above center
+  returnRoot.style.transform = "translate(-50%, -50%)";
+  returnRoot.style.zIndex = "40";
+  returnRoot.style.display = "none";
+
+  const btn = document.createElement("button");
+  btn.textContent = "Return to Lobby";
+  btn.style.padding = "8px 12px";
+  btn.style.borderRadius = "8px";
+  btn.style.border = "1px solid rgba(255,255,255,0.2)";
+  btn.style.background = "rgba(0,0,0,0.6)";
+  btn.style.color = "white";
+  btn.style.cursor = "pointer";
+
+  btn.onclick = () => {
+    clientNetState.state = null;
+    clientUIState.phase = "LOBBY";
+    clientUIState.selectedBuilding = null;
+
+    returnRoot.style.display = "none";
+  };
+
+  returnRoot.appendChild(btn);
+  document.body.appendChild(returnRoot);
 }
 
 export function updateLobbyUI() {
-  if (!root) return;
-
-  root.style.display = clientUIState.phase === "PLAYING" ? "none" : "flex";
-
-  const status = root.querySelector("#status") as HTMLDivElement;
-  const btn = root.querySelector("#play") as HTMLButtonElement;
-  const lobby = clientNetState.lobby;
   const state = clientNetState.state;
+  const lobby = clientNetState.lobby;
+
+  /* ===== LOBBY OVERLAY ===== */
+lobbyRoot.style.display =
+  !state?.gameOver &&
+  (clientUIState.phase === "LOBBY" || clientUIState.phase === "QUEUED")
+    ? "flex"
+    : "none";
 
   if (!lobby) {
-    status.textContent = "Connecting…";
-    btn.disabled = true;
+    statusEl.textContent = "Connecting…";
     return;
   }
-
-  //  Match running → disable play
-  if (state?.started && !state.gameOver) {
-    btn.disabled = true;
-    btn.style.opacity = "0.5";
-    btn.style.cursor = "not-allowed";
-    status.textContent = "Match in progress. Please wait.";
-    return;
-  }
-
-  // Match ended or not started
-  btn.disabled = clientUIState.phase === "QUEUED";
-  btn.style.opacity = btn.disabled ? "0.6" : "1";
-  btn.style.cursor = btn.disabled ? "default" : "pointer";
 
   if (clientUIState.phase === "QUEUED") {
-    status.textContent = `Waiting for players: ${lobby.connected}/${lobby.required}`;
+    statusEl.textContent = `Waiting for players: ${lobby.connected}/${lobby.required}`;
   } else {
-    status.textContent = `Lobby: ${lobby.connected}/${lobby.required} queued`;
+    statusEl.textContent = `Lobby: ${lobby.connected}/${lobby.required}`;
+    playBtn.disabled = false;
+    playBtn.style.opacity = "1";
+  }
+
+  /* ===== RETURN BUTTON ===== */
+  if (state?.gameOver){ //|| state?.players.get(String(clientNetState.playerId))?.eliminated === true) {
+    returnRoot.style.display = "block";
+  } else {
+    returnRoot.style.display = "none";
   }
 }

@@ -42,5 +42,7 @@ export interface PlayerState {
   eliminated: boolean
   hqPos: Axial
   lastSeen: number
+  isBot?: boolean
+
 }
 

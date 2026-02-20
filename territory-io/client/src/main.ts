@@ -22,10 +22,10 @@ let didDrag = false;
 let hoveredHex: { q: number; r: number } | null = null;
 let connectedByPlayer = new Map<PlayerId, Set<string>>();
 
-const DRAG_THRESHOLD = 6; // pixels
+const DRAG_THRESHOLD = 10; // pixels
+const inputPassword = prompt("Enter Server Password:");
 
-
-const { sendIntent } = connect(`ws://${window.location.hostname}:3001`, {
+const { sendIntent } = connect(`ws://${window.location.hostname}:3001?password=${encodeURIComponent(inputPassword)}`, {
   onWelcome: (id, requiredPlayers) => {
     clientNetState.playerId = id;
     clientNetState.lobby = { connected: 0, required: requiredPlayers };
@@ -38,6 +38,11 @@ const { sendIntent } = connect(`ws://${window.location.hostname}:3001`, {
 
     const meId = clientNetState.playerId;
     const me = meId ? state.players.get(meId) : null;
+
+    if (state.gameOver) {
+      clientUIState.phase = "GAME_OVER";
+      return;
+    }
 
     if (me?.status === "PLAYING") {
       clientUIState.phase = "PLAYING";
@@ -195,7 +200,8 @@ window.addEventListener("mouseup", () => {
 
 function loop() {
   requestAnimationFrame(loop);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (clientUIState.phase !== "GAME_OVER")
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const state = clientNetState.state as CoreGameState | null;
   const me = clientNetState.playerId;
@@ -203,11 +209,17 @@ function loop() {
   updateLobbyUI();
   updateBuildButtons(state, me);
 
-  if (clientUIState.phase !== "PLAYING" || !state || !me) {
-    ctx.fillStyle = "#020617"; // dark slate
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const canRenderMap =
+  state &&
+  me &&
+  (clientUIState.phase === "PLAYING" ||
+   clientUIState.phase === "GAME_OVER");
+
+  if (!canRenderMap) 
     return;
-  }
+  ctx.fillStyle = "#0c0c0cff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
 
   if (state)
     {

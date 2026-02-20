@@ -1,0 +1,269 @@
+
+import { WebSocketServer } from "ws";
+import { checkAFKPlayers } from "./util/afk.js";
+import crypto from "node:crypto";
+import {
+  createGameState,
+  applyIntent,
+  tick,
+  serializeState,
+  MAPS,
+  PlayerId,
+  handlePlayerDeath,
+  CoreGameState,
+  PLAYER_COLORS,
+  setPlayer,
+  STARTING_GOLD, STARTING_ARMY,
+  type WireState
+} from "../../shared";
+import { initMap } from "./init/initMap";
+import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
+import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
+
+type ClientMsg =
+  | { type: "INTENT"; intent: any };
+
+export type ServerMsg =
+  | { type: "WELCOME"; playerId: string; requiredPlayers: number }
+  | { type: "LOBBY"; connected: number; required: number }
+  | { type: "STATE"; state: WireState };
+
+const rooms = new Map<RoomId, GameRoom>();
+let queueRoomId: RoomId;
+const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
+const sockets = new Map<PlayerId, WebSocket>();
+
+const PORT = 3001;
+const wss = new WebSocketServer({ port: PORT });
+let last = Date.now();
+let reset = true;
+;
+const first = createRoom(rooms);
+queueRoomId = first.id;
+
+function getQueueRoom(): GameRoom {
+  let room = rooms.get(queueRoomId);
+  if (!room) {
+    room = createRoom(rooms);
+    queueRoomId = room.id;
+  }
+  return room;
+}
+
+function queuedCount(room: GameRoom) {
+  return [...room.state.players.values()].filter(p => p.status === "QUEUED").length;
+}
+
+function broadcastLobby() {
+  const room = getQueueRoom(); // your fixed version
+  const msg = JSON.stringify({
+    type: "LOBBY",
+    connected: queuedCount(room),
+    required: room.maxPlayers
+  });
+
+  for (const ws of sockets.values()) {
+    if (ws.readyState === ws.OPEN) ws.send(msg);
+  }
+}
+
+function handleJoinQueue(playerId: PlayerId, username: string) {
+  // Already in a room? ignore (or allow leaving later)
+  if (playerRoom.has(playerId)) return;
+
+  const room = getQueueRoom();
+
+  // Add player to this room’s state
+  const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
+
+  setPlayer(room.state, {
+    id: playerId,
+    username,
+    color,
+    status: "QUEUED",
+    gold: STARTING_GOLD,
+    army: STARTING_ARMY,
+    eliminated: false,
+    hqPos: { q: 0, r: 0 },
+    lastSeen: Date.now(),
+  });
+
+  room.playerIds.add(playerId);
+  playerRoom.set(playerId, room.id);
+
+  broadcastLobby();
+  startMatchIfReady(room);
+}
+
+function broadcastRoom(room: GameRoom, msg: ServerMsg) {
+  const data = JSON.stringify(msg);
+  for (const pid of room.playerIds) {
+    const ws = sockets.get(pid);
+    if (ws && ws.readyState === ws.OPEN) ws.send(data);
+  }
+}
+
+function broadcastRoomState(room: GameRoom) {
+  broadcastRoom(room, { type: "STATE", state: serializeState(room.state) });
+}
+
+function destroyRoomSoon(roomId: RoomId) {
+  const room = rooms.get(roomId);
+  if (!room || room.closing) return;
+  room.closing = true;
+
+  setTimeout(() => {
+    const r = rooms.get(roomId);
+    if (!r) return;
+
+    // Return all its players to lobby (not queued, just free to click Play again)
+    for (const pid of r.playerIds) {
+      playerRoom.delete(pid);
+      // Optional: tell client “you are in lobby now” via LOBBY message already
+      // (clients also stop receiving STATE since room is gone)
+    }
+
+    rooms.delete(roomId);
+
+    // Everyone sees the lobby count for current queue room
+    broadcastLobby();
+  }, 5000); // allow winner screen for 5s
+}
+
+function startMatchIfReady(room: GameRoom) {
+  if (room.state.started) return;
+
+  const queued = [...room.state.players.values()].filter(p => p.status === "QUEUED");
+  if (queued.length < room.maxPlayers) return;
+
+  // Move queued -> playing
+  for (const p of queued) p.status = "PLAYING";
+
+  const map = MAPS.get(room.mapId);
+  if (!map) {
+    throw new Error(`Map not found at match start: ${room.mapId}`);
+  }
+
+  // Init map + spawns inside this room’s state
+  initMap(room.state, map);
+  spawnPlayersFromMap(room.state, map);
+
+  room.state.started = true;
+  room.lastTickMs = Date.now();
+
+  broadcastRoomState(room);
+
+  // mmediately create a new queue room (fresh lobby target)
+  const newRoom = createRoom(rooms);
+  queueRoomId = newRoom.id;
+
+  broadcastLobby();
+}
+
+// SERVER TICK LOOP
+setInterval(() => {
+  const now = Date.now();
+
+  for (const room of rooms.values()) {
+    if (!room.state.started) continue;
+    if (room.closing) continue;
+
+    // Game over handling
+    if (room.state.gameOver) {
+      broadcastRoomState(room);
+      destroyRoomSoon(room.id);
+      continue;
+    }
+
+    const dt = (now - room.lastTickMs) / 1000;
+    room.lastTickMs = now;
+
+    tick(room.state, dt);
+    broadcastRoomState(room);
+  }
+}, 100);
+ 
+
+wss.on("connection", (ws, req) => {
+  const playerId = crypto.randomUUID();
+  sockets.set(playerId, ws);
+  const room = getQueueRoom()
+  ws.send(JSON.stringify({ type: "WELCOME", playerId, requiredPlayers: room.maxPlayers } satisfies ServerMsg));
+  ws.send(JSON.stringify({
+    type: "LOBBY",
+    connected: queuedCount(getQueueRoom()),
+    required: room.maxPlayers
+  }));
+
+  ws.on("message", (buf) => {
+    let msg: ClientMsg | null = null;
+    try { msg = JSON.parse(buf.toString()); } catch { return; }
+    if (!msg || msg.type !== "INTENT") return;
+
+    const intent = msg.intent;
+
+    if (intent.type === "JOIN_QUEUE") {
+      handleJoinQueue(playerId, intent.username);
+      return;
+    }
+
+    if (intent.type === "PING") {
+      const rid = playerRoom.get(playerId);
+      if (!rid) return;
+      const room = rooms.get(rid);
+      if (!room) return;
+      const p = room.state.players.get(playerId);
+      if (p) p.lastSeen = Date.now();
+      return;
+    }
+
+    // Gameplay intents only if player is in a room
+    const rid = playerRoom.get(playerId);
+    if (!rid) return;
+
+    const room = rooms.get(rid);
+    if (!room) return;
+
+    applyIntent(room.state, playerId, intent);
+  });
+
+  ws.on("close", () => {
+    sockets.delete(playerId);
+
+    const rid = playerRoom.get(playerId);
+    if (!rid) {
+      broadcastLobby();
+      return;
+    }
+
+    const room = rooms.get(rid);
+    if (!room) {
+      playerRoom.delete(playerId);
+      broadcastLobby();
+      return;
+    }
+
+    const player = room.state.players.get(playerId);
+
+    if (player?.status === "PLAYING") {
+      // Treat disconnect as defeat
+      handlePlayerDeath(room.state, playerId);
+    }
+
+    // Remove player bookkeeping
+    room.playerIds.delete(playerId);
+    room.state.players.delete(playerId);
+    playerRoom.delete(playerId);
+
+    // Update lobby if needed
+    if (rid === queueRoomId) broadcastLobby();
+
+    // Cleanup empty running games
+    if (room.state.started && room.playerIds.size === 0) {
+      rooms.delete(rid);
+    }
+  });
+
+});
+
+console.log(`Server running on ws://localhost:${PORT}`);

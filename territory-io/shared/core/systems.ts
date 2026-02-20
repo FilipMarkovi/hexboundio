@@ -5,7 +5,6 @@ import { BASE_CAPTURE_COST, BASE_TILE_DEFENSE, FORT_COST, FORT_DEFENSE_ADJACENT,
     GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_COST, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST, DEMOLISH_REFUND_RATIO, PLAYER_COLORS} from "./constants";
 import type { CoreGameState } from "./state";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state";
-import { setPlayer } from "./state.js";
 
 
 export type Intent =
@@ -346,12 +345,7 @@ export function computeConnectedTilesFromHQ(
   // Find HQ
   let hqTile: { q: number; r: number } | null = null;
 
-  for (const t of state.tiles.values()) {
-    if (t.ownerId === playerId && t.building === "HQ") {
-      hqTile = { q: t.q, r: t.r };
-      break;
-    }
-  }
+  hqTile = state.players.get(playerId).hqPos
 
   if (!hqTile) return visited;
 

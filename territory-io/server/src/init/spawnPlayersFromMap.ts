@@ -1,8 +1,8 @@
-import { CoreGameState, placeHQ } from "../../../shared";
+import { CoreGameState, placeHQ, Axial } from "../../../shared";
 import type { GameMapDefinition } from "../../../shared/maps/types";
 
 
-function shuffle<T>(arr: T[]) {
+export function shuffle<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -22,12 +22,14 @@ export function spawnPlayersFromMap(
     );
   }
 
-  // Optional: deterministic but fair shuffle
-  // comment this out if you want fixed order
   shuffle(spawns);
 
   for (let i = 0; i < playerIds.length; i++) {
     const { q, r } = spawns[i];
     placeHQ(state, q, r, playerIds[i]);
+    const p = state.players.get(playerIds[i])
+    const newPos: Axial = { q, r };
+    if (p)
+      p.hqPos = newPos
   }
 }

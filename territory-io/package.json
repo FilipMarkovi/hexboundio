@@ -1,9 +1,12 @@
-
 {
   "name": "territory-io",
   "private": true,
-  "workspaces": ["client", "server"],
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "concurrently": "^9.0.0"
   },
   "scripts": {
@@ -11,5 +14,8 @@
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build && npm --prefix server run build"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   }
 }

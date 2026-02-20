@@ -56,6 +56,25 @@ export function isAdjacentOwned(state: CoreGameState, q: number, r: number, owne
   });
 }
 
+export function neighborTiles(state: CoreGameState, q: number, r: number): any {
+  let found = Array()
+  neighbors(q, r).forEach(n => {
+    const t = getTile(state, n.q, n.r);
+    found.push(t)
+  });
+  return found;
+}
+
+export function nonOwnedNeighbors(state: CoreGameState, q: number, r: number, ownerId: PlayerId): any {
+  let found = Array()
+  neighbors(q, r).some(n => {
+    const t = getTile(state, n.q, n.r);
+    if (t && t.ownerId != ownerId)
+    found.push(n)
+  });
+  return found;
+}
+
 export function isAdjacentOwnedAndConnected(
   state: CoreGameState,
   q: number,
@@ -70,4 +89,15 @@ export function isAdjacentOwnedAndConnected(
     if (t.ownerId !== playerId) return false;
     return connected.has(key(t.q, t.r));
   });
+}
+
+export function hexDistance(
+  a: { q: number; r: number },
+  b: { q: number; r: number }
+): number {
+  const dq = a.q - b.q;
+  const dr = a.r - b.r;
+  const ds = (a.q + a.r) - (b.q + b.r);
+
+  return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
 }
