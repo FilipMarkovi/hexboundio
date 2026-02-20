@@ -23,9 +23,9 @@ let hoveredHex: { q: number; r: number } | null = null;
 let connectedByPlayer = new Map<PlayerId, Set<string>>();
 
 const DRAG_THRESHOLD = 10; // pixels
-const inputPassword = prompt("Enter Server Password:");
 
-const { sendIntent } = connect(`ws://${window.location.hostname}:3001?password=${encodeURIComponent(inputPassword)}`, {
+
+const { sendIntent } = connect(`ws://${window.location.hostname}:3001`, {
   onWelcome: (id, requiredPlayers) => {
     clientNetState.playerId = id;
     clientNetState.lobby = { connected: 0, required: requiredPlayers };

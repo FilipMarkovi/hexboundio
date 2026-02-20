@@ -22,8 +22,6 @@ import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager";
 import { handleQueueBots } from "./ai/queueBotManager";
 
-const SERVER_PASSWORD = "jjmother";
-
 type ClientMsg =
   | { type: "INTENT"; intent: any };
 
@@ -193,17 +191,6 @@ setInterval(() => {
  
 
 wss.on("connection", (ws, req) => {
-  //PASSWORD CHECK
-  const url = new URL(req.url || "", `http://${req.headers.host}`);
-  const password = url.searchParams.get("password");
-
-  // 2. Reject the connection if the password doesn't match
-  if (password !== SERVER_PASSWORD) {
-    console.log("Rejected connection: Invalid password");
-    ws.close(4000, "Invalid password"); 
-    return;
-  }
-
   const playerId = crypto.randomUUID();
   sockets.set(playerId, ws);
   const room = getQueueRoom()
