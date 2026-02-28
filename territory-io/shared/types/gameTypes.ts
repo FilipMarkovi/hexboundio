@@ -2,7 +2,7 @@ import { TerrainType } from "../maps/terrain.js";
 
 export type PlayerId = string
 
-export type BuildingType = "FORT" | "BARRACKS";
+export type BuildingType = "FORT" | "BARRACKS" | "HOUSE";
 
 export type PlayerStatus =
   | "LOBBY"     // connected, not queued
@@ -20,10 +20,14 @@ export interface TileState {
   r: number
   ownerId: PlayerId | null
   defense: number
-  building: "HQ" | "BARRACKS" | "FORT" | null
 
+  building: "HQ" | BuildingType |  null
+  
   terrain: TerrainType
   baseDefense: number
+
+  defenseHeat: number
+  lastDefendedAt: number
 
   capture: {
     by: PlayerId;
@@ -43,6 +47,12 @@ export interface PlayerState {
   hqPos: Axial
   lastSeen: number
   isBot?: boolean
+
+  buildings: {
+    fort: number,
+    barracks: number,
+    house: number,
+  }
 
 }
 

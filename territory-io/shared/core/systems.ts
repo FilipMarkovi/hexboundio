@@ -1,20 +1,26 @@
 
-import type { PlayerId, TileState } from "../types/gameTypes";
-import { BASE_CAPTURE_COST, BASE_TILE_DEFENSE, FORT_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
+import { isNumberObject } from "node:util/types";
+import type { PlayerId, TileState, BuildingType } from "../types/gameTypes";
+import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
    HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
-    GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_COST, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST, DEMOLISH_REFUND_RATIO, PLAYER_COLORS} from "./constants";
+    GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
+     DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
+    DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
+  TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
+  PLAYER_KILL_GOLD_REWARD} from "./constants";
 import type { CoreGameState } from "./state";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state";
 
 
 export type Intent =
   | { type: "CAPTURE"; q: number; r: number }
-  | { type: "BUILD_FORT"; q: number; r: number }
-  | { type: "BUILD_BARRACKS"; q: number; r: number }
+  | { type: "BUILD"; q: number; r: number; buildingType: string }
   | { type: "DEMOLISH"; q: number; r: number }
   | { type: "DEFEND"; q: number; r: number }
   | { type: "JOIN_QUEUE"; username: string }
-  | { type: "PING" };
+  | { type: "RETURN_LOBBY" }
+  | { type: "PING" }
+  | null;
 
 export function captureCost(defense: number) {
   return BASE_CAPTURE_COST * defense;
@@ -84,6 +90,7 @@ export function canStartCapture(state: CoreGameState, playerId: PlayerId, q: num
   if (!isAdjacentOwnedAndConnected(state, q, r, playerId)) return false;
   if (tile.terrain === "BEDROCK") return false;
   const cost = captureCost(tile.defense);
+  if(Date.now() - tile.lastDefendedAt < TILE_ATTACK_COOLDOWN) return false
   return player.army >= cost;
 }
 
@@ -143,52 +150,49 @@ export function tryDefend(state: CoreGameState, playerId: PlayerId, q: number, r
   if (!tile.capture) return false;                 
   if (tile.ownerId !== playerId) return false;    
   if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
+  
+  const heatCostIncrease = tile.defenseHeat * DEFENSE_COST_INCREMENT
 
-  const cost = Math.ceil(tile.capture.cost * DEFEND_COST_RATIO) ;
+  const cost = Math.ceil(tile.capture.cost * (DEFEND_COST_RATIO + heatCostIncrease)) ;
   if (player.army < cost) return false;
 
   player.army -= cost;
   tile.capture = null; // cancel capture
+
+  tile.defenseHeat = Math.min(tile.defenseHeat + 1, DEFENSE_HEAT_MAX); 
+  tile.lastDefendedAt = Date.now();
   return true;
 }
 
-export function tryBuildFort(state: CoreGameState, playerId: PlayerId, q: number, r: number) {
-  const tile = getTile(state, q, r);
-  const player = state.players.get(playerId);
-  if (!tile || !player) return false;
-  if (tile.ownerId !== playerId) return false;
-  if (tile.building !== null) return false;
-  if (player.gold < FORT_COST) return false;
-  if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
-
-  player.gold -= FORT_COST;
-  tile.building = "FORT";
-  recalcDefense(state);
-  return true;
-}
-
-export function tryBuildBarracks(
+export function tryBuild(
   state: CoreGameState,
   playerId: PlayerId,
   q: number,
-  r: number
+  r: number,
+  buildingType: BuildingType,
 ) {
   const tile = getTile(state, q, r);
   const player = state.players.get(playerId);
   if (!tile || !player) return false;
   if (tile.ownerId !== playerId) return false;
   if (tile.building !== null) return false;
-  if (player.gold < BARRACKS_COST) return false;
+  if (player.gold < BUILDING_COST[buildingType]) return false;
   if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
+  if(player.buildings.barracks >= BUILDING_LIMIT[buildingType]) return false
 
-  player.gold -= BARRACKS_COST;
-  tile.building = "BARRACKS";
+  player.gold -= BUILDING_COST[buildingType];
+  const bKey = buildingType.toLowerCase() as keyof typeof player.buildings;
+  player.buildings[bKey]++;
+  tile.building = buildingType;
+  if(buildingType == "FORT")
+    recalcDefense(state)
 
   return true;
 }
 
 export function tick(state: CoreGameState, dt: number) {
   dt = Math.min(dt, 0.25);
+  const now = Date.now()
 
   state.connectedCache = new Map();
   for (const p of state.players.values()) {
@@ -214,24 +218,53 @@ export function tick(state: CoreGameState, dt: number) {
         t.capture = null;
         continue;
       }
-
+      
+      // capture progress (big territory = slower capture)
+      const territorySize: number = state.connectedCache.get(t.ownerId!)?.size ?? 0;
       t.capture.progress +=
-        (CAPTURE_RATE / t.defense) * dt;
+        (CAPTURE_RATE / Math.max(1,t.defense) / 
+        (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1)) * dt;
 
       if (t.capture.progress >= 1) {
         // === FINISH CAPTURE ===
         const prevOwner = t.ownerId;
         const prevBuilding = t.building;
         const wasHQ = t.building === "HQ";
-
-        t.ownerId = by;
-
-        // Clear buildings except barracks rule (your existing logic)
-        if (prevBuilding === "BARRACKS") {
-          t.building = "BARRACKS";
-        } else {
-          t.building = null;
+        const attackingPlayer = state.players.get(by!)
+        // building clearing / owning
+        if(prevBuilding && attackingPlayer){
+          const defendingPlayer = state.players.get(String(t.ownerId))
+          if(attackingPlayer && defendingPlayer){
+            if (prevBuilding === "BARRACKS") {
+              defendingPlayer.buildings.barracks--;
+              if(attackingPlayer.buildings.barracks < BUILDING_LIMIT["BARRACKS"]){
+                t.building = "BARRACKS";
+                attackingPlayer.buildings.barracks++;
+              } else
+                t.building = null;
+            } else if (prevBuilding === "HOUSE") {
+              defendingPlayer.buildings.house--;
+              if(attackingPlayer.buildings.house < BUILDING_LIMIT["HOUSE"]){
+                t.building = "HOUSE";
+                attackingPlayer.buildings.house++;
+              } else
+                t.building = null;
+            } else if(prevBuilding === "FORT") {
+              t.building = null;
+              defendingPlayer.buildings.fort--;
+            } else if(prevBuilding === "HQ") {
+              t.building = null;
+            } else {
+              t.building = null;
+            }
+          }
         }
+        t.ownerId = by;
+        t.defenseHeat = 0;
+        t.lastDefendedAt = 0;
+        if(attackingPlayer)
+          attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense)
+
 
         t.capture = null;
 
@@ -239,10 +272,18 @@ export function tick(state: CoreGameState, dt: number) {
 
         if (wasHQ && prevOwner && prevOwner !== by) {
           handlePlayerDeath(state, prevOwner);
+          if(attackingPlayer)
+            attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + PLAYER_KILL_GOLD_REWARD)
         }
       }
+      
     }
     if (!t.ownerId) continue;
+
+    // reset heat for necessary tiles with owner
+    if (now - t.lastDefendedAt > DEFENSE_HEAT_DECAY_MS) {
+      t.defenseHeat = 0;
+    }
 
     const set = state.connectedCache.get(t.ownerId);
     if (!set) continue;
@@ -250,13 +291,6 @@ export function tick(state: CoreGameState, dt: number) {
     if (!set.has(key(t.q, t.r))) continue; // CUT OFF
 
     ownedCount.set(t.ownerId, (ownedCount.get(t.ownerId) ?? 0) + 1);
-
-    if (t.building === "BARRACKS") {
-      barracksCount.set(
-        t.ownerId,
-        (barracksCount.get(t.ownerId) ?? 0) + 1
-      );
-    }
   }
 
   // Apply income / regen
@@ -265,28 +299,32 @@ export function tick(state: CoreGameState, dt: number) {
     if (p.status !== "PLAYING") continue;
 
     const owned = ownedCount.get(p.id) ?? 0;
-    const barracks = barracksCount.get(p.id) ?? 0;
-
+    const barracks = p.buildings.barracks ?? 0
     const effectiveOwned = Math.max(0, owned - 1);
-    const armyCap = BASE_ARMY_MAX + effectiveOwned * ARMY_CAP_PER_TILE;
+    const armyCap = BASE_ARMY_MAX + effectiveOwned * ARMY_CAP_PER_TILE + (p.buildings.house ?? 0) * HOUSE_ARMY_CAP_BONUS;
+
+    // gold optimum around GOLD_PEAK ratio, army optimum around ARMY_PEAK ratio
+    // initial falloff is gradual, then steep toward extremes
+    const ratio = armyCap > 0 ? p.army / armyCap : 0;
+    const armyMult = Math.max(0.4, 1 - 2.2 * Math.pow(ratio - ARMY_PEAK, 2)); // 2.2 is slope decline rate, higher number faster falloff from optimum
+    const goldMult = Math.max(0.4, 1 - 1.95 * Math.pow(ratio - GOLD_PEAK, 2)); // exponent is width of bell
 
     p.gold = Math.min(
       BASE_GOLD_MAX,
-      p.gold + (owned * GOLD_PER_TILE + GOLD_PASSIVE) * dt
+      p.gold + (owned * GOLD_PER_TILE + GOLD_PASSIVE) * dt * goldMult
     );
 
     p.army = Math.min(
       armyCap,
-      p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS) * dt
+      p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS + owned * ARMY_PER_TILE) * dt * armyMult
     );
   }
 }
 
 export function applyIntent(state: CoreGameState, playerId: PlayerId, intent: Intent) {
-  if (!state.started || state.gameOver) return;
+  if (!state.started || state.gameOver || !intent) return;
   if (intent.type === "CAPTURE") tryCapture(state, playerId, intent.q, intent.r);
-  if (intent.type === "BUILD_FORT") tryBuildFort(state, playerId, intent.q, intent.r);
-  if (intent.type === "BUILD_BARRACKS") tryBuildBarracks(state, playerId, intent.q, intent.r);
+  if (intent.type === "BUILD") tryBuild(state, playerId, intent.q, intent.r, intent.buildingType as BuildingType);
   if (intent.type === "DEMOLISH") handleDemolish(state, playerId, intent.q, intent.r);
   if (intent.type === "DEFEND") tryDefend(state, playerId, intent.q, intent.r);
   
@@ -315,23 +353,30 @@ export function handlePlayerDeath(
   // 3. Recalculate defenses (important!)
   recalcDefense(state);
 
-  // check if there is only one player left alive
+  // check if there is only one player left alive or if only bots remain
   checkGameOver(state)
 }
 
 export function checkGameOver(state: CoreGameState) {
   let aliveCount = 0;
   let lastAliveUsername: string | null = null;
-
+  let realPlayerCount = 0;
   for (const p of state.players.values()) {
     if (p.status === "PLAYING" && !p.eliminated) {
       aliveCount += 1;
       lastAliveUsername = p.username;
+      if(!p.isBot) realPlayerCount++;
     }
   }
 
-  if (aliveCount <= 1 && lastAliveUsername) {
+  if ((aliveCount <= 1 && lastAliveUsername)) {
     state.gameOver = { winner: lastAliveUsername };
+  }
+  if (realPlayerCount <= 0) {
+    if (lastAliveUsername)
+      state.gameOver = { winner: lastAliveUsername };
+    else
+      state.gameOver = { winner: "BOTS" }
   }
 }
 
@@ -339,13 +384,16 @@ export function computeConnectedTilesFromHQ(
   state: CoreGameState,
   playerId: PlayerId
 ): Set<string> {
+  if(!playerId) return new Set()
   const visited = new Set<string>();
   const stack: Array<{ q: number; r: number }> = [];
 
   // Find HQ
   let hqTile: { q: number; r: number } | null = null;
-
-  hqTile = state.players.get(playerId).hqPos
+  const player = state.players.get(playerId);
+  if (player) {
+    hqTile = player.hqPos;
+  }
 
   if (!hqTile) return visited;
 
@@ -364,7 +412,7 @@ export function computeConnectedTilesFromHQ(
       if (visited.has(k)) continue;
 
       visited.add(k);
-      stack.push({ q: t.q, r: t.r });
+      stack.push({ q: t.q, r: t.r });if(!playerId) return new Set()
     }
   }
 
@@ -399,14 +447,18 @@ export function handleDemolish(
   if (tile.ownerId !== playerId) return;
   if (!tile.building) return;
   if (tile.building === "HQ") return;
+  const player = state.players.get(playerId)
+  if(!player) return;
 
   if (!isTileConnectedToHQ(state, playerId, q, r)) return;
 
   const cost = BUILDING_COST[tile.building];
   const refund = Math.floor(cost * DEMOLISH_REFUND_RATIO);
 
+  const key = tile.building.toLowerCase() as keyof typeof player.buildings;
+  player.buildings[key]--;
   tile.building = null;
-  state.players.get(playerId)!.gold += refund;
+  player.gold += refund;
 
   recalcDefense(state);
 }

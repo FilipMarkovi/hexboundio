@@ -2,13 +2,13 @@
 
 import { get } from "node:http";
 import { CoreGameState, PlayerId, nonOwnedNeighbors, getConnectedTilesFromHQ, neighborTiles, getTile,
-   FORT_COST, hexDistance, TileState, PIVOT_DIST, STEEPNESS, key } from "../../../shared";
+   BUILDING_COST, BUILDING_LIMIT, hexDistance, TileState, PIVOT_DIST, STEEPNESS, key, Intent, canStartCapture,} from "../../../shared";
 import { shuffle } from "../init/spawnPlayersFromMap.js";
 
 export function dumbAI(
   state: CoreGameState,
   botId: PlayerId
-) {
+): Intent {
   const bot = state.players.get(botId);
   if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
 
@@ -20,6 +20,7 @@ export function dumbAI(
 
   for (const tileAxial of ownedTiles){
     const ownedTile = state.tiles.get(tileAxial);
+    if (!ownedTile) continue;
     let validTargets = nonOwnedNeighbors(state, ownedTile.q, ownedTile.r, botId);
     if (validTargets.length == 0) continue;
 
@@ -36,7 +37,7 @@ export function dumbAI(
 }
 
 
-export function normalAI(state: CoreGameState, botId: PlayerId) {
+export function normalAI(state: CoreGameState, botId: PlayerId): Intent {
   const bot = state.players.get(botId);
   if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
 
@@ -52,11 +53,11 @@ export function normalAI(state: CoreGameState, botId: PlayerId) {
   }
 
   // Build defense
-  if (bot.gold >= FORT_COST)
+  if (bot.gold >= BUILDING_COST["FORT"])
     for (const tile of hqNeighbors) {
       if (tile && !tile.building && tile.ownerId === botId) {
           console.log("build")
-          return { type: "BUILD_FORT", q: tile.q, r: tile.r };
+          return { type: "BUILD", q: tile.q, r: tile.r, buildingType:"FORT" };
       }
     }
 
@@ -69,6 +70,7 @@ export function normalAI(state: CoreGameState, botId: PlayerId) {
 
   for (const tileAxial of ownedTiles){
     const ownedTile = state.tiles.get(tileAxial);
+    if(!ownedTile) continue;
     let validTargets = nonOwnedNeighbors(state, ownedTile.q, ownedTile.r, botId);
     if (validTargets.length == 0) continue;
 
@@ -87,7 +89,7 @@ export function normalAI(state: CoreGameState, botId: PlayerId) {
 export function hardAI(
   state: CoreGameState,
   botId: PlayerId
-) {
+): Intent {
   const bot = state.players.get(botId);
   if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
 
@@ -108,7 +110,7 @@ export function hardAI(
 
   // BUILD FORTS ON HQ RING
 
-  if (bot.gold >= FORT_COST) {
+  if (bot.gold >= BUILDING_COST["FORT"] && bot.buildings.fort < BUILDING_LIMIT["FORT"]) {
     for (const tile of hqNeighbors) {
       if (
         tile &&
@@ -116,9 +118,10 @@ export function hardAI(
         !tile.building
       ) {
         return {
-          type: "BUILD_FORT",
+          type: "BUILD",
           q: tile.q,
-          r: tile.r
+          r: tile.r,
+          buildingType: "FORT"
         };
       }
     }
@@ -175,11 +178,12 @@ export function hardAI(
     for (const candidate of candidates) {
       randomRoll -= candidate.weight;
       if (randomRoll <= 0) {
-        return {
-          type: "CAPTURE",
-          q: candidate.target.q,
-          r: candidate.target.r
-        };
+        if(canStartCapture(state,botId,candidate.target.q,candidate.target.r))
+          return {
+            type: "CAPTURE",
+            q: candidate.target.q,
+            r: candidate.target.r
+          };
       }
     }
   }

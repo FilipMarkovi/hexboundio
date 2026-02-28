@@ -6,5 +6,6 @@ export function initKeyboard() {
 
     if (e.key === "1") toggleBuildMode("FORT");
     if (e.key === "2") toggleBuildMode("BARRACKS");
+    if (e.key === "3") toggleBuildMode("HOUSE");
   });
 }

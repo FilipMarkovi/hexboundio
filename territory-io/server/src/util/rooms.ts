@@ -2,6 +2,8 @@ import { CoreGameState, PlayerId, MAPS } from "../../../shared";
 import crypto from "node:crypto";
 import { createGameState } from "../../../shared";
 import { butterflyMap } from "../../../shared/maps/instances/butterflyMap.js";
+import { mountainsMap } from "../../../shared/maps/instances/mountainsMap";
+import { eightWayMap } from "../../../shared/maps/instances/eightWayMap";
 
 export type RoomId = string;
 
@@ -30,7 +32,7 @@ const MAP_POOL: WeightedMap[] =
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  mountains: 1,
+  octagon: 1,
 };
 
 for (const m of MAP_POOL) {

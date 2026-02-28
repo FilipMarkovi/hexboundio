@@ -1,13 +1,14 @@
 import type { BuildingType } from "../../../shared";
-import { FORT_COST, BARRACKS_COST } from "../../../shared";
+import { BUILDING_COST, BUILDING_LIMIT } from "../constants";
 import { clientUIState } from "../state/clientState";
 import { clientNetState } from "../state/clientState";
 
 function getCost(type: BuildingType): number {
-  switch (type) {
-    case "FORT": return FORT_COST;
-    case "BARRACKS": return BARRACKS_COST;
-  }
+  return BUILDING_COST[type]
+}
+
+function getLimit(type: BuildingType): number {
+  return BUILDING_LIMIT[type]
 }
 
 export function toggleBuildMode(type: BuildingType) {
@@ -19,9 +20,10 @@ export function toggleBuildMode(type: BuildingType) {
   if (!player) return;
 
   const cost = getCost(type);
+  const countkey = type.toString().toLowerCase() as keyof typeof player.buildings;
 
-  // not enough gold skip
-  if (player.gold < cost) return;
+  // not enough gold or limit reached skip
+  if (player.gold < cost || (player.buildings[countkey] >= getLimit(type))) return;
 
   // Toggle behavior
   if (clientUIState.selectedBuilding === type) {

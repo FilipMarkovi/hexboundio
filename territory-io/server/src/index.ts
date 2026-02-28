@@ -1,5 +1,4 @@
-
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { checkAFKPlayers } from "./util/afk.js";
 import crypto from "node:crypto";
 import {
@@ -13,7 +12,7 @@ import {
   CoreGameState,
   PLAYER_COLORS,
   setPlayer,
-  STARTING_GOLD, STARTING_ARMY,
+  STARTING_GOLD, STARTING_ARMY, TICK_RATE,
   type WireState
 } from "../../shared";
 import { initMap } from "./init/initMap";
@@ -21,6 +20,23 @@ import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager";
 import { handleQueueBots } from "./ai/queueBotManager";
+
+import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = 6767;
+const app = express();
+app.use(express.static(path.join(__dirname, "../../client/dist")));
+app.get("*", (_, res) => {
+  res.sendFile(path.join(__dirname, "../../client/dist/index.html"));
+});
+const server =app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
 
 type ClientMsg =
   | { type: "INTENT"; intent: any };
@@ -35,8 +51,7 @@ let queueRoomId: RoomId;
 const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
 const sockets = new Map<PlayerId, WebSocket>();
 
-const PORT = 3001;
-const wss = new WebSocketServer({ port: PORT });
+const wss = new WebSocketServer({ server });
 let last = Date.now();
 let reset = true;
 ;
@@ -88,6 +103,11 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
     eliminated: false,
     hqPos: { q: 0, r: 0 },
     lastSeen: Date.now(),
+    buildings: {
+      fort: 0,
+      barracks: 0,
+      house: 0,
+    }
   });
 
   room.playerIds.add(playerId);
@@ -96,6 +116,32 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
   broadcastLobby();
   handleQueueBots(room, playerRoom);
   startMatchIfReady(room);
+}
+
+function handleReturnToLobby(pid: PlayerId) {
+  const roomid = playerRoom.get(pid)
+  if(!roomid) return;
+
+  const room = rooms.get(roomid)
+  if (!room) return;
+
+  const state = room.state
+  if (!state) return;
+ 
+  let player = state.players.get(pid)
+  if(!player) return;
+  // Remove player from game state
+  handlePlayerDeath(state, pid);
+
+  // Update status
+  player.status = "LOBBY";
+  room.playerIds.delete(pid)
+  playerRoom.delete(pid);
+  
+
+  // Broadcast update
+  broadcastRoomState(room);
+  broadcastLobby()
 }
 
 function broadcastRoom(room: GameRoom, msg: ServerMsg) {
@@ -163,11 +209,11 @@ export function startMatchIfReady(room: GameRoom) {
   broadcastLobby();
 }
 
-let bot_tick = 9;
+let bot_tick = 8;
 // SERVER TICK LOOP
 setInterval(() => {
   const now = Date.now();
-  bot_tick = (bot_tick + 1) % 10
+  bot_tick = (bot_tick + 1) % 9
   for (const room of rooms.values()) {
     if (!room.state.started) continue;
     if (room.closing) continue;
@@ -187,7 +233,7 @@ setInterval(() => {
     broadcastRoomState(room);
   }
   //console.log("tick time: ",Date.now() - now)
-}, 100);
+}, TICK_RATE);
  
 
 wss.on("connection", (ws, req) => {
@@ -209,7 +255,15 @@ wss.on("connection", (ws, req) => {
     const intent = msg.intent;
 
     if (intent.type === "JOIN_QUEUE") {
+      if (intent.username && intent.username.length > 15) {
+        intent.username = intent.username.substring(0, 15);
+      }
       handleJoinQueue(playerId, intent.username);
+      return;
+    }
+
+    if (intent.type === "RETURN_LOBBY") {
+      handleReturnToLobby(playerId)
       return;
     }
 

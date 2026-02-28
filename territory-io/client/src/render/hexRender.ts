@@ -4,7 +4,9 @@ import { canCaptureClient } from "../utils/canCapture";
 import { camera } from "./camera";
 import { getStripePattern } from "./patterns";
 import { FILL_ALPHA } from "../constants";
-import { darken, withAlpha } from "./playerColors";
+import { darken } from "./playerColors";
+import { DEFENSE_HEAT_DECAY_MS } from "../../../shared";
+
 export function drawCaptureRing(
   ctx: CanvasRenderingContext2D,
   q: number,
@@ -152,4 +154,68 @@ export function getTileColor(args: {
   }
 
   return { color, fillAlpha };
+}
+
+export function drawHexEffects(
+  ctx: CanvasRenderingContext2D,
+  q: number,
+  r: number,
+  size: number,
+  tile: TileState
+) {
+  const now = Date.now();
+  const timeSinceLast = now - (tile.lastDefendedAt || 0);
+  if(timeSinceLast > DEFENSE_HEAT_DECAY_MS) return 
+
+  // 1. Calculate World/Screen position
+  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
+  const worldY = size * (3 / 2 * r);
+  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+  const renderSize = size * camera.zoom;
+
+  // === EFFECT 1: ATTACK COOLDOWN (The 1-second "Stun") ===
+  if (timeSinceLast < 1000) {
+    const p = 1 - (timeSinceLast / 1000); // 1.0 down to 0.0
+    ctx.save();
+    ctx.beginPath();
+    // Draw hex shape for the highlight
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i + Math.PI / 6;
+      const px = x + renderSize * Math.cos(angle);
+      const py = y + renderSize * Math.sin(angle);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    
+    // Bright white flash that fades out
+    ctx.strokeStyle = `rgba(255, 255, 255, ${p * 0.8})`;
+    ctx.lineWidth = 4 * camera.zoom;
+    ctx.stroke();
+    
+    // Subtle inner "shield" fill
+    ctx.fillStyle = `rgba(255, 255, 255, ${p * 0.2})`;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // === EFFECT 2: DEFENSE HEAT (The 10-second "Heat") ===
+  if (timeSinceLast < DEFENSE_HEAT_DECAY_MS && tile.defenseHeat > 0) {
+    const p = 1 - (timeSinceLast / DEFENSE_HEAT_DECAY_MS); // 1.0 down to 0.0
+    const radius = renderSize * 0.48;
+    
+    ctx.save();
+    // Use an orange-red glow based on heat intensity
+    const heatColor = tile.defenseHeat >= 3 ? "#ec2d2d" : "#ec9150d7";
+    
+    ctx.setLineDash([4 * camera.zoom, 4 * camera.zoom]); // Dashed "unstable" look
+    ctx.strokeStyle = heatColor;
+    ctx.globalAlpha = p * 0.6; // Fades over 10s
+    ctx.lineWidth = (1 + tile.defenseHeat) * camera.zoom; // Gets thicker with more heat
+    
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }

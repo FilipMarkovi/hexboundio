@@ -13,7 +13,7 @@ export function serializeState(state: CoreGameState): WireState {
     tiles: Array.from(state.tiles.values()),
     players: Array.from(state.players.values()),
     started: state.started,
-    gameOver: state.gameOver
+    gameOver: state.gameOver,
   };
 }
 
@@ -22,6 +22,8 @@ export function deserializeState(raw: WireState): CoreGameState {
     tiles: new Map(raw.tiles.map((t: any) => [`${t.q},${t.r}`, t])),
     players: new Map(raw.players.map((p: any) => [p.id, p])),
     started: raw.started,
-    gameOver: raw.gameOver
+    gameOver: raw.gameOver,
+    mapId: null,
+    mapName: null,
   };
 }

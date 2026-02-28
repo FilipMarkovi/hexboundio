@@ -1,7 +1,7 @@
 // server/ai/botManager.ts
 
 import type { GameRoom } from "../util/rooms";
-import { applyIntent } from "../../../shared";
+import { applyIntent, Intent } from "../../../shared";
 import { dumbAI, normalAI, hardAI } from "./simpleExpandBot";
 
 export function runBots(room: GameRoom) {

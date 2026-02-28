@@ -30,7 +30,6 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
 
     <button id="play"
       style="padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:#1f2937;color:white;cursor:pointer;min-width:240px;">
-      Play
     </button>
 
     <div id="status" style="opacity:0.9;font:14px system-ui;"></div>
@@ -39,7 +38,13 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   document.body.appendChild(lobbyRoot);
 
   playBtn = lobbyRoot.querySelector("#play")!;
+  playBtn.textContent = "Play"
   inputEl = lobbyRoot.querySelector("#name")!;
+  inputEl.maxLength=15
+  if (inputEl.value === "") {
+    const randomId = Math.floor(10000 + Math.random() * 90000);
+    inputEl.value = `Player_${randomId}`;
+  }
   statusEl = lobbyRoot.querySelector("#status")!;
 
   playBtn.onclick = () => {
@@ -50,6 +55,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
     clientUIState.phase = "QUEUED";
 
     playBtn.disabled = true;
+    inputEl.disabled = true
     playBtn.style.opacity = "0.6";
 
     sendIntent({ type: "JOIN_QUEUE", username: name });
@@ -74,10 +80,10 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   btn.style.cursor = "pointer";
 
   btn.onclick = () => {
+    sendIntent({ type: "RETURN_LOBBY"});
     clientNetState.state = null;
     clientUIState.phase = "LOBBY";
     clientUIState.selectedBuilding = null;
-
     returnRoot.style.display = "none";
   };
 
@@ -106,11 +112,12 @@ lobbyRoot.style.display =
   } else {
     statusEl.textContent = `Lobby: ${lobby.connected}/${lobby.required}`;
     playBtn.disabled = false;
+    inputEl.disabled = false
     playBtn.style.opacity = "1";
   }
 
   /* ===== RETURN BUTTON ===== */
-  if (state?.gameOver){ //|| state?.players.get(String(clientNetState.playerId))?.eliminated === true) {
+  if (state?.gameOver || state?.players.get(String(clientNetState.playerId))?.eliminated === true) {
     returnRoot.style.display = "block";
   } else {
     returnRoot.style.display = "none";

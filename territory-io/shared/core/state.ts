@@ -5,7 +5,7 @@ export interface CoreGameState {
   tiles: Map<string, TileState>;
   players: Map<PlayerId, PlayerState>;
   started: boolean;
-  gameOver: null | { winner: PlayerId; loser: PlayerId };
+  gameOver: null | { winner: PlayerId; };
   connectedCache?: Map<PlayerId, Set<string>> | null;
   mapId: null | string;
   mapName: null | string;

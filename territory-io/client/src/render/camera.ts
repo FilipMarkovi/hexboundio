@@ -10,5 +10,5 @@ export const camera: Camera = {
   zoom: 1
 };
 
-export const MIN_ZOOM = 0.4;
-export const MAX_ZOOM = 2.5;
+export const MIN_ZOOM = 0.75;
+export const MAX_ZOOM = 4.0;

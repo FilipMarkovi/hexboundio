@@ -40,6 +40,7 @@ function fillRoomWithBots(
   room: GameRoom,
   playerRoom: Map<string, string>
 ) {
+  if(room.state.players.size <= 0) return
   const bot_count = room.maxPlayers - room.state.players.size
   const names = getRandomNames(bot_count)
   let i = 0
@@ -62,6 +63,11 @@ function fillRoomWithBots(
       hqPos: { q: 0, r: 0 },
       lastSeen: Date.now(),
       isBot: true,
+      buildings: {
+        fort: 0,
+        barracks: 0,
+        house: 0,
+      }
     });
     i++;
 

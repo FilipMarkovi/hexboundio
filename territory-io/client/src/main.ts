@@ -1,5 +1,5 @@
 
-import { drawHex, getTileColor, drawCaptureRing } from "./render/hexRender";
+import { drawHex, getTileColor, drawCaptureRing, drawHexEffects } from "./render/hexRender";
 import { drawHexText } from "./render/text";
 import { pixelToAxial } from "./utils/hexMath";
 import { drawHUD,drawBuildMode } from "./ui/hud";
@@ -20,12 +20,15 @@ import { initLobbyUI, updateLobbyUI } from "./ui/lobby";
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
 let hoveredHex: { q: number; r: number } | null = null;
-let connectedByPlayer = new Map<PlayerId, Set<string>>();
+export let connectedByPlayer = new Map<PlayerId, Set<string>>();
+export let myConTileCount: number | null = 0;
 
-const DRAG_THRESHOLD = 10; // pixels
+const DRAG_THRESHOLD = 14; // pixels
 
+const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const wsUrl = `${protocol}//${window.location.host}`;
 
-const { sendIntent } = connect(`ws://${window.location.hostname}:3001`, {
+export const { sendIntent } = connect(wsUrl, {
   onWelcome: (id, requiredPlayers) => {
     clientNetState.playerId = id;
     clientNetState.lobby = { connected: 0, required: requiredPlayers };
@@ -96,6 +99,7 @@ canvas.addEventListener("mousemove", (e) => {
   }
 });
 
+// hover hex
 canvas.addEventListener("mousemove", (e) => {
 const rect = canvas.getBoundingClientRect()
 
@@ -116,6 +120,7 @@ const screenY = e.clientY - rect.top
   hoveredHex = { q, r };
 });
 
+// attack / place building / defend
 canvas.addEventListener("click", () => {
   if (clientUIState.phase !== "PLAYING") return;
   if(didDrag || !hoveredHex) return
@@ -129,12 +134,10 @@ canvas.addEventListener("click", () => {
 
     if (tile && tile.ownerId === clientNetState.playerId) {
       sendIntent({
-        type:
-          selected === "FORT"
-            ? "BUILD_FORT"
-            : "BUILD_BARRACKS",
+        type: "BUILD",
         q: hoveredHex.q,
-        r: hoveredHex.r
+        r: hoveredHex.r,
+        buildingType: selected
       });
     }
 
@@ -166,6 +169,7 @@ canvas.addEventListener("click", () => {
   }
 });
 
+// demolish building
 canvas.addEventListener("mousedown", (e) => {
   if (clientUIState.phase !== "PLAYING") return;
   if (e.button !== 2) return
@@ -233,6 +237,7 @@ function loop() {
         }
       }
     }
+  myConTileCount = connectedByPlayer.get(me)?.size ?? 0;
 
   if (state && me) {
     for (const tile of state.tiles.values()) {
@@ -257,6 +262,7 @@ function loop() {
       });
 
       drawHex(ctx, tile.q, tile.r, HEX_SIZE, color, fillAlpha);
+      drawHexEffects(ctx, tile.q, tile.r, HEX_SIZE, tile);
       
 
       const text = tile.defense.toString();
@@ -264,6 +270,7 @@ function loop() {
         tile.building === "FORT" ? `🛡${text}` :
         tile.building === "HQ" ? `🏰${text}` :
         tile.building === "BARRACKS" ? `⚔️${text}` :
+        tile.building === "HOUSE" ? `🏠${text}` :
         text;
       drawHexText(ctx, tile.q, tile.r, HEX_SIZE, label);
 
@@ -287,7 +294,7 @@ function loop() {
       const hoveredTile = state.tiles.get(
         `${hoveredHex?.q},${hoveredHex?.r}`
       );
-      if (hoveredTile) {
+      if (hoveredTile && !state.gameOver) {
         drawTileInfo(ctx, hoveredTile, state, me);
       }
     }

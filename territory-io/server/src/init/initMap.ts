@@ -11,14 +11,17 @@ export function initMap(
 
   for (const hex of map.hexes) {
     state.tiles.set(`${hex.q},${hex.r}`, {
-      q: hex.q,
-      r: hex.r,
-      ownerId: null,
-      building: null,
-      terrain: hex.terrain,
-      baseDefense: TERRAIN_BASE_DEFENSE[hex.terrain],
-      defense: TERRAIN_BASE_DEFENSE[hex.terrain],
-    });
+    q: hex.q,
+    r: hex.r,
+    ownerId: null,
+    building: null,
+    terrain: hex.terrain,
+    baseDefense: TERRAIN_BASE_DEFENSE[hex.terrain],
+    defense: TERRAIN_BASE_DEFENSE[hex.terrain],
+    capture: null,
+    defenseHeat: 0,
+    lastDefendedAt: 0
+  });
   }
 
   state.mapId = map.id;
