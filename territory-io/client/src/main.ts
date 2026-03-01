@@ -1,5 +1,5 @@
 
-import { drawHex, getTileColor, drawCaptureRing, drawHexEffects } from "./render/hexRender";
+import { drawHex, getTileColor, drawCaptureHex, drawHexEffects, drawBuildingIcon } from "./render/hexRender";
 import { drawHexText } from "./render/text";
 import { pixelToAxial } from "./utils/hexMath";
 import { drawHUD,drawBuildMode } from "./ui/hud";
@@ -201,7 +201,6 @@ window.addEventListener("mouseup", () => {
   mouseDownPos = null;
 });
 
-
 function loop() {
   requestAnimationFrame(loop);
   if (clientUIState.phase !== "GAME_OVER")
@@ -266,18 +265,15 @@ function loop() {
       
 
       const text = tile.defense.toString();
-      const label =
-        tile.building === "FORT" ? `🛡${text}` :
-        tile.building === "HQ" ? `🏰${text}` :
-        tile.building === "BARRACKS" ? `⚔️${text}` :
-        tile.building === "HOUSE" ? `🏠${text}` :
-        text;
-      drawHexText(ctx, tile.q, tile.r, HEX_SIZE, label);
+      const label = text;
+      if(tile.building)
+        drawBuildingIcon(ctx, tile.q, tile.r, HEX_SIZE, tile.building, color);
+      drawHexText(ctx, tile.q, tile.r, HEX_SIZE, label, !!tile.building);
 
       if (tile.capture) {
         const attacker = state.players.get(tile.capture.by);
         const ringColor = attacker?.color ?? "#fff";
-        drawCaptureRing(
+        drawCaptureHex(
           ctx,
           tile.q,
           tile.r,

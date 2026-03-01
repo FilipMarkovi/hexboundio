@@ -1,13 +1,14 @@
 
-import type { TileState, PlayerId } from "../../../shared";
+import type { TileState, PlayerId, BuildingType } from "../../../shared";
 import { canCaptureClient } from "../utils/canCapture";
 import { camera } from "./camera";
 import { getStripePattern } from "./patterns";
 import { FILL_ALPHA } from "../constants";
 import { darken } from "./playerColors";
 import { DEFENSE_HEAT_DECAY_MS } from "../../../shared";
-
-export function drawCaptureRing(
+const visualProgressMap = new Map<string, number>();
+/** */
+export function drawCaptureHex(
   ctx: CanvasRenderingContext2D,
   q: number,
   r: number,
@@ -15,27 +16,56 @@ export function drawCaptureRing(
   progress: number,
   color: string
 ) {
-  // world position (EXACT SAME AS drawHex)
+  // 1. Calculate Center Position (Matches your hex drawing)
   const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
   const worldY = size * (3 / 2 * r);
+  const centerX = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const centerY = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
 
-  // camera transform (EXACT SAME AS drawHex)
-  const x =
-    (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y =
-    (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+  // 2. Shrink it slightly so it stays "inside" the edge
+  const innerSize = size * camera.zoom * 0.9; 
+  
+  // 3. Define the 6 corners of a hexagon (starting from top)
+  const corners: {x: number, y: number}[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 2; // -90 degrees is top
+    corners.push({
+      x: centerX + innerSize * Math.cos(angle),
+      y: centerY + innerSize * Math.sin(angle)
+    });
+  }
+  // Add the first corner at the end to close the loop for calculations
+  corners.push(corners[0]);
 
-  const radius = size * camera.zoom * 0.9 *0.7;
-  const start = -Math.PI / 2;
-  const end = start + Math.min(progress, 1) * Math.PI * 2;
-
+  // 4. Drawing Setup
   ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, 3 * camera.zoom);
+  ctx.lineWidth = Math.max(2, 4 * camera.zoom);
+  ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.arc(x, y, radius, start, end);
+  ctx.moveTo(corners[0].x, corners[0].y);
+
+  // 5. Calculate how many sides to draw
+  // progress * 6 gives us the current "side index" (e.g., 0.5 * 6 = 3 sides)
+  const totalSides = 6;
+  const currentProgress = Math.min(progress, 1) * totalSides;
+
+  for (let i = 0; i < totalSides; i++) {
+    const sideProgress = Math.max(0, Math.min(1, currentProgress - i));
+    
+    if (sideProgress <= 0) break;
+
+    const start = corners[i];
+    const end = corners[i + 1];
+
+    // Interpolate between corners if the side is only partially finished
+    const targetX = start.x + (end.x - start.x) * sideProgress;
+    const targetY = start.y + (end.y - start.y) * sideProgress;
+
+    ctx.lineTo(targetX, targetY);
+  }
+
   ctx.stroke();
 }
-
 
 export function drawHex(
   ctx: CanvasRenderingContext2D,
@@ -202,7 +232,7 @@ export function drawHexEffects(
   // === EFFECT 2: DEFENSE HEAT (The 10-second "Heat") ===
   if (timeSinceLast < DEFENSE_HEAT_DECAY_MS && tile.defenseHeat > 0) {
     const p = 1 - (timeSinceLast / DEFENSE_HEAT_DECAY_MS); // 1.0 down to 0.0
-    const radius = renderSize * 0.48;
+    const radius = renderSize * 0.76;
     
     ctx.save();
     // Use an orange-red glow based on heat intensity
@@ -219,3 +249,176 @@ export function drawHexEffects(
     ctx.restore();
   }
 }
+
+export function drawBuildingIcon(
+  ctx: CanvasRenderingContext2D, 
+  q: number, 
+  r: number, 
+  size: number, 
+  type: BuildingType | "HQ",
+  strokeColor: string 
+) {
+  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
+  const worldY = size * (3.5 / 2.333 * r);
+
+  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+
+  const s = size * camera.zoom * 0.35; 
+  
+  ctx.save();
+  ctx.translate(x, y);
+  
+  // 1. DRAW FOUNDATION PAD (Creates contrast against the tile)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; // Dark transparent shadow
+  ctx.beginPath();
+  // An ellipse that sits at the "bottom" of the building
+  ctx.ellipse(0, s * 0.6, s * 1.2, s * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. SETUP BUILDING STYLES
+  ctx.lineWidth = Math.max(1.5, 2 * camera.zoom);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  
+  // High contrast: Bright white outline, very dark solid fill
+  ctx.strokeStyle = "#ffffffb2"; 
+  ctx.fillStyle = "rgba(20, 24, 28, 0.9)"; 
+
+  ctx.beginPath();
+  switch (type) {
+    case "HOUSE":
+      // Pitched roof house with a door and a round window
+      // Outer shell
+      ctx.moveTo(-s * 0.8, s * 0.8); ctx.lineTo(s * 0.8, s * 0.8);
+      ctx.lineTo(s * 0.8, -s * 0.2); ctx.lineTo(0, -s * 0.8); 
+      ctx.lineTo(-s * 0.8, -s * 0.2); ctx.closePath();
+      // Door
+      ctx.moveTo(-s * 0.25, s * 0.8); ctx.lineTo(-s * 0.25, s * 0.2);
+      ctx.lineTo(s * 0.25, s * 0.2); ctx.lineTo(s * 0.25, s * 0.8);
+      break;
+
+    case "BARRACKS":
+      // Crossed Swords (Universally recognizable for military)
+      // Sword 1 (Top Left to Bottom Right)
+      ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(s * 0.7, s * 0.7); // Blade
+      ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.3, -s * 0.7); // Tip detail
+      ctx.lineTo(-s * 0.7, -s * 0.3);
+      ctx.moveTo(s * 0.4, s * 0.4); ctx.lineTo(s * 0.6, s * 0.2); // Crossguard
+      // Sword 2 (Top Right to Bottom Left)
+      ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.7, s * 0.7); // Blade
+      ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(s * 0.3, -s * 0.7); // Tip detail
+      ctx.lineTo(s * 0.7, -s * 0.3);
+      ctx.moveTo(-s * 0.4, s * 0.4); ctx.lineTo(-s * 0.6, s * 0.2); // Crossguard
+      break;
+
+    case "FORT":
+      // Heavy Castle with an arched doorway
+      // Main walls
+      ctx.moveTo(-s * 0.9, s * 0.9); ctx.lineTo(s * 0.9, s * 0.9);
+      ctx.lineTo(s * 0.9, -s * 0.5);
+      // Merlons (The teeth on top)
+      ctx.lineTo(s * 0.5, -s * 0.5); ctx.lineTo(s * 0.5, -s * 0.2);
+      ctx.lineTo(s * 0.2, -s * 0.2); ctx.lineTo(s * 0.2, -s * 0.5);
+      ctx.lineTo(-s * 0.2, -s * 0.5); ctx.lineTo(-s * 0.2, -s * 0.2);
+      ctx.lineTo(-s * 0.5, -s * 0.2); ctx.lineTo(-s * 0.5, -s * 0.5);
+      ctx.lineTo(-s * 0.9, -s * 0.5); ctx.closePath();
+      // Arched Portcullis/Doorway
+      ctx.moveTo(-s * 0.3, s * 0.9); ctx.lineTo(-s * 0.3, s * 0.4);
+      ctx.arc(0, s * 0.4, s * 0.3, Math.PI, 0); 
+      ctx.lineTo(s * 0.3, s * 0.9);
+      break;
+
+    case "HQ":
+      // Majestic Crown
+      ctx.moveTo(-s * 0.7, s * 0.8); ctx.lineTo(s * 0.7, s * 0.8); // Flat base
+      ctx.lineTo(s * 0.9, -s * 0.5); // Right edge up
+      ctx.lineTo(s * 0.4, -s * 0.1); // Inner right dip
+      ctx.lineTo(0, -s * 0.9);       // Center tall spike
+      ctx.lineTo(-s * 0.4, -s * 0.1); // Inner left dip
+      ctx.lineTo(-s * 0.9, -s * 0.5); // Left edge up
+      ctx.closePath();
+      // Add jewels/rivets to the base of the crown
+      ctx.moveTo(0, s * 0.5); ctx.arc(0, s * 0.5, s * 0.1, 0, Math.PI * 2);
+      ctx.moveTo(-s * 0.4, s * 0.5); ctx.arc(-s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
+      ctx.moveTo(s * 0.4, s * 0.5); ctx.arc(s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
+      break;
+  }
+
+  // 3. RENDER THE BUILDING
+  ctx.fill();   // Fills with the dark color
+  ctx.stroke(); // Draws the white outline
+  
+  ctx.restore();
+}
+
+/** 
+export function drawCaptureHex(
+  ctx: CanvasRenderingContext2D,
+  q: number,
+  r: number,
+  size: number,
+  serverProgress: number, // Rename this to clarify it's the "target"
+  color: string
+) {
+  const tileKey = `${q},${r}`;
+  
+  // 1. Get the last "smooth" value we drew
+  let visualProgress = visualProgressMap.get(tileKey) ?? serverProgress;
+
+  // 2. The "Chase" - Move visual progress 10% of the way to server progress every frame
+  // This creates a smooth 60fps sliding effect
+  const lerpSpeed = 0.15; 
+  visualProgress += (serverProgress - visualProgress) * lerpSpeed;
+
+  // 3. Logic to handle resets (if capture stops or flips to a new owner)
+  if (Math.abs(serverProgress - visualProgress) > 0.5 || serverProgress === 0) {
+    visualProgress = serverProgress;
+  }
+  
+  // Save the new smooth value for the next frame
+  visualProgressMap.set(tileKey, visualProgress);
+
+  // --- REST OF THE FUNCTION REMAINS THE SAME, JUST USE visualProgress ---
+
+  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
+  const worldY = size * (3 / 2 * r);
+  const centerX = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const centerY = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+
+  const innerSize = size * camera.zoom * 0.9; 
+  
+  const corners: {x: number, y: number}[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 2;
+    corners.push({
+      x: centerX + innerSize * Math.cos(angle),
+      y: centerY + innerSize * Math.sin(angle)
+    });
+  }
+  corners.push(corners[0]);
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, 4 * camera.zoom);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+
+  // USE visualProgress HERE
+  const totalSides = 6;
+  const currentProgress = Math.min(visualProgress, 1) * totalSides;
+
+  for (let i = 0; i < totalSides; i++) {
+    const sideProgress = Math.max(0, Math.min(1, currentProgress - i));
+    if (sideProgress <= 0) break;
+
+    const start = corners[i];
+    const end = corners[i + 1];
+    const targetX = start.x + (end.x - start.x) * sideProgress;
+    const targetY = start.y + (end.y - start.y) * sideProgress;
+
+    ctx.lineTo(targetX, targetY);
+  }
+
+  ctx.stroke();
+}*/

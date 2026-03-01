@@ -259,13 +259,12 @@ export function tick(state: CoreGameState, dt: number) {
             }
           }
         }
+        if(attackingPlayer && !t.ownerId)
+          attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense)
+        
         t.ownerId = by;
         t.defenseHeat = 0;
         t.lastDefendedAt = 0;
-        if(attackingPlayer)
-          attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense)
-
-
         t.capture = null;
 
         recalcDefense(state);

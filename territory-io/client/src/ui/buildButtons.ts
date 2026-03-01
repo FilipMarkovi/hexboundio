@@ -76,6 +76,7 @@ export function initBuildButtons() {
       tooltip.innerHTML = `
         <div style="font-weight: bold; color: #facc15; margin-bottom: 4px;">${d.label}</div>
         <div style="opacity: 0.9; line-height: 1.4;">${d.description}</div>
+        <div style="opacity: 0.9; line-height: 1.4;">Building cost: ${d.cost} gold</div>
       `;
       tooltip.style.display = "block";
       const rect = btn.getBoundingClientRect();
@@ -125,7 +126,7 @@ export function updateBuildButtons(state: CoreGameState | null, me: PlayerId | n
     const disable = (!affordable || (currentCount >= d.limit));
 
     btn.disabled = disable
-    btn.textContent = d.label + ` ${d.cost} (${currentCount}/${d.limit})`
+    btn.textContent = `[${d.key}] ` + d.label + ` (${currentCount}/${d.limit})`
 
     // Gray out when unaffordable
     btn.style.opacity = !disable ? "1" : "0.35";

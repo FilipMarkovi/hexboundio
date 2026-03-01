@@ -1,3 +1,4 @@
+const GOLD_SCALE = 1;
 
 // CONFLICT
 export const BASE_CAPTURE_COST = 5;
@@ -9,13 +10,13 @@ export const DEFENSE_COST_INCREMENT = 0.2;  // +20% cost per click
 export const TILE_ATTACK_COOLDOWN = 1000;
 
 // Economy
-export const STARTING_GOLD = 10
+export const STARTING_GOLD = 10 * GOLD_SCALE
 export const STARTING_ARMY = 1000
 
 export const BUILDING_COST = {
-  BARRACKS: 30,
-  FORT: 25,
-  HOUSE: 20,
+  BARRACKS: 30 * GOLD_SCALE,
+  FORT: 25 * GOLD_SCALE,
+  HOUSE: 20 * GOLD_SCALE,
 } as const;
 
 export const BUILDING_LIMIT = {
@@ -28,11 +29,11 @@ export const DEMOLISH_REFUND_RATIO = 0.5;
 
 export const ARMY_CAP_PER_TILE = 2;
 export const BASE_ARMY_MAX = 40;
-export const BASE_GOLD_MAX = 100;
+export const BASE_GOLD_MAX = 100 * GOLD_SCALE;
 
-export const GOLD_PER_TILE = 0.05;
+export const GOLD_PER_TILE = 0.05 * GOLD_SCALE;
 export const ARMY_PER_TILE = 0.02
-export const GOLD_PASSIVE = 0.5;
+export const GOLD_PASSIVE = 0.5 * GOLD_SCALE;
 export const ARMY_PASSIVE = 1;
 
 export const ARMY_PEAK = 0.6; 

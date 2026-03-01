@@ -1,3 +1,5 @@
+const GOLD_SCALE = 1;
+
 import { TerrainType } from "../maps/terrain.js";
 // World
 export const TERRAIN_BASE_DEFENSE: Record<TerrainType, number> = {
@@ -29,17 +31,17 @@ export const DEFENSE_COST_INCREMENT = 0.2;  // +20% cost per click
 
 export const TILE_ATTACK_COOLDOWN = 1000;
 
-export const TILES_UNTIL_MAX_ATTACKTIME_INCREASE = 30
-export const MAX_ATTACKTIME_INCREASE = 0.8 // in seconds
+export const TILES_UNTIL_MAX_ATTACKTIME_INCREASE = 35
+export const MAX_ATTACKTIME_INCREASE = 1 // in seconds
 
 // Economy
-export const STARTING_GOLD = 10
+export const STARTING_GOLD = 100
 export const STARTING_ARMY = 15
 
 export const BUILDING_COST = {
-  BARRACKS: 30,
-  FORT: 25,
-  HOUSE: 20,
+  BARRACKS: 30 * GOLD_SCALE,
+  FORT: 25 * GOLD_SCALE,
+  HOUSE: 20 * GOLD_SCALE,
 } as const;
 
 export const BUILDING_LIMIT = {
@@ -64,15 +66,15 @@ export const DEMOLISH_REFUND_RATIO = 0.5;
 
 export const ARMY_CAP_PER_TILE = 2;
 export const BASE_ARMY_MAX = 40;
-export const BASE_GOLD_MAX = 100;
+export const BASE_GOLD_MAX = 100 * GOLD_SCALE;
 
-export const GOLD_PER_TILE = 0.01;
+export const GOLD_PER_TILE = 0.01 * GOLD_SCALE;
 export const ARMY_PER_TILE = 0.02
-export const GOLD_PASSIVE = 0.1;
+export const GOLD_PASSIVE = 0.1 * GOLD_SCALE;
 export const ARMY_PASSIVE = 1;
 
-export const NEUTRAL_TILE_CAPTURE_GOLD = 1; // gold gained per defense of captured neutral tile
-export const PLAYER_KILL_GOLD_REWARD = 10;
+export const NEUTRAL_TILE_CAPTURE_GOLD = 1 * GOLD_SCALE; // gold gained per defense of captured neutral tile
+export const PLAYER_KILL_GOLD_REWARD = 10 * GOLD_SCALE;
 
 export const ARMY_PEAK = 0.6; 
 export const GOLD_PEAK = 0.4; 
