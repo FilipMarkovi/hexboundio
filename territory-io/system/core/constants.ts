@@ -1,6 +1,6 @@
 const GOLD_SCALE = 1;
 
-import { TerrainType } from "../maps/terrain.js";
+import { TerrainType } from "../../shared";
 // World
 export const TERRAIN_BASE_DEFENSE: Record<TerrainType, number> = {
   GRASS: 1,
@@ -31,7 +31,7 @@ export const DEFENSE_COST_INCREMENT = 0.2;  // +20% cost per click
 
 export const TILE_ATTACK_COOLDOWN = 1000;
 
-export const TILES_UNTIL_MAX_ATTACKTIME_INCREASE = 35
+export const TILES_UNTIL_MAX_ATTACKTIME_INCREASE = 45
 export const MAX_ATTACKTIME_INCREASE = 1 // in seconds
 
 // Economy
@@ -85,7 +85,7 @@ export const HQ_DEFENSE_SELF = 4;
 export const HQ_DEFENSE_ADJACENT = 2;
 export const FORT_DEFENSE_SELF = 2;
 export const FORT_DEFENSE_ADJACENT = 1;
-export const BARRACKS_ARMY_BONUS = 1.2;
+export const BARRACKS_ARMY_BONUS = 1;
 export const HOUSE_ARMY_CAP_BONUS = 10;
 
 export const FORT_LIMIT = 3

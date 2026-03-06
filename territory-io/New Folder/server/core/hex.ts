@@ -1,4 +1,4 @@
-import { Axial } from "../../../shared/types/gameTypes"
+import { Axial } from "../../../system/types/gameTypes"
 
 export const DIRS: Axial[] = [
   { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },

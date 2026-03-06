@@ -1,6 +1,6 @@
-import type { CoreGameState } from "../../../shared/index";
-import type { GameMapDefinition } from "../../../shared/maps/types";
-import { TERRAIN_BASE_DEFENSE } from "../../../shared/core/constants";
+import type { CoreGameState } from "../../../system/index";
+import type { GameMapDefinition } from "../../../system/maps/types";
+import { TERRAIN_BASE_DEFENSE } from "../../../system/core/constants";
 
 export function initMap(
   state: CoreGameState,

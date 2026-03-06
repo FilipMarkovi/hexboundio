@@ -16,6 +16,7 @@ import { initBuildButtons, updateBuildButtons } from "./ui/buildButtons";
 import { getConnectedTilesFromHQ_Client } from "./utils/supply";
 import { drawTileInfo } from "./ui/tileInfo";
 import { initLobbyUI, updateLobbyUI } from "./ui/lobby";
+import { addGameLog, drawGameLogs } from "./ui/hud";
 
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
@@ -35,6 +36,9 @@ export const { sendIntent } = connect(wsUrl, {
   },
   onLobby: (connected, required) => {
     clientNetState.lobby = { connected, required };
+  },
+  onLog: (text, color) => {
+    addGameLog(text, color);
   },
   onState: (state) => {
     clientNetState.state = state;
@@ -201,7 +205,14 @@ window.addEventListener("mouseup", () => {
   mouseDownPos = null;
 });
 
+let lastTime = performance.now();
+export let deltaTime = 0;
+
 function loop() {
+  const currentTime = performance.now();
+  deltaTime = (currentTime - lastTime) / 1000;
+  lastTime = currentTime;
+
   requestAnimationFrame(loop);
   if (clientUIState.phase !== "GAME_OVER")
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -279,7 +290,8 @@ function loop() {
           tile.r,
           HEX_SIZE,
           tile.capture.progress,
-          ringColor 
+          ringColor,
+          deltaTime
         );
       }
       
@@ -298,6 +310,7 @@ function loop() {
 
   drawHUD(ctx);
   drawBuildMode(ctx);
+  drawGameLogs(ctx)
   
 }
 

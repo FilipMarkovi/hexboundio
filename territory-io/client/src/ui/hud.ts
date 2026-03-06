@@ -3,7 +3,6 @@ import { clientNetState } from "../state/clientState";
 import { clientUIState } from "../state/clientState";
 import { BASE_GOLD_MAX, BASE_ARMY_MAX, ARMY_CAP_PER_TILE, TICK_RATE, HOUSE_ARMY_CAP_BONUS} from "../constants";
 import { myConTileCount } from "../main";
-import { tick } from "../../../shared";
 
 let lastArmy = 0;
 let lastGold = 0;
@@ -161,4 +160,98 @@ export function drawBuildMode(ctx: CanvasRenderingContext2D) {
   ctx.fillText(text, ctx.canvas.width / 2, 30);
   
   ctx.font = "10px sans-serif";
+}
+
+interface GameLogMessage {
+  id: number;
+  text: string;
+  color: string;
+  timestamp: number;
+  opacity: number;
+  xOffset: number; // For "slide-in" animation
+}
+
+export const gameLogs: GameLogMessage[] = [];
+const MAX_LOGS = 5;
+const LOG_LIFETIME = 10000;
+
+export function addGameLog(text: string, color: string = "#ffffff") {
+  gameLogs.unshift({
+    id: Date.now(),
+    text,
+    color,
+    timestamp: Date.now(),
+    opacity: 0, // Start transparent
+    xOffset: -20 // Start slightly to the left
+  });
+
+  if (gameLogs.length > MAX_LOGS) {
+    gameLogs.pop();
+  }
+}
+
+export function drawGameLogs(ctx: CanvasRenderingContext2D) {
+  const now = Date.now();
+  const startY = 120;
+  const spacing = 28; // Increased spacing for a cleaner look
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  for (let i = 0; i < gameLogs.length; i++) {
+    const log = gameLogs[i];
+    const age = now - log.timestamp;
+
+    // 1. Smooth Animation Logic (Lerp)
+    // Slide in and Fade in
+    log.opacity += (1 - log.opacity) * 0.15;
+    log.xOffset += (0 - log.xOffset) * 0.15;
+
+    // Fade out at the end
+    let displayOpacity = log.opacity;
+    if (age > LOG_LIFETIME - 1000) {
+      displayOpacity = Math.max(0, (LOG_LIFETIME - age) / 1000);
+    }
+
+    if (displayOpacity <= 0) continue;
+
+    const x = 12 + log.xOffset;
+    const y = startY + i * spacing;
+
+    ctx.save();
+    ctx.globalAlpha = displayOpacity;
+
+    // 2. Draw Background Pill with Gradient
+    const textWidth = ctx.measureText(log.text).width;
+    const bgWidth = textWidth + 24;
+    const bgHeight = 22;
+
+    // Subtle dark gradient
+    const grad = ctx.createLinearGradient(x, 0, x + bgWidth, 0);
+    grad.addColorStop(0, "rgba(0, 0, 0, 0.7)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0.2)");
+    
+    ctx.fillStyle = grad;
+    roundRect(ctx, x, y - bgHeight / 2, bgWidth, bgHeight, 4);
+    ctx.fill();
+
+    // 3. Draw Left Accent Border (The "Pro" touch)
+    ctx.fillStyle = log.color;
+    // A thin 3px vertical line on the left of the pill
+    ctx.fillRect(x, y - bgHeight / 2, 3, bgHeight);
+
+    // 4. Draw Text with slight shadow for pop
+    ctx.font = "bold 13px Inter, sans-serif";
+    
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillText(log.text, x + 13, y + 1); 
+    
+    // Main Text
+    ctx.fillStyle = "#ffffff"; // Keep text white for readability
+    // Or use log.color if you want the text itself to be colored
+    ctx.fillText(log.text, x + 12, y);
+
+    ctx.restore();
+  }
 }

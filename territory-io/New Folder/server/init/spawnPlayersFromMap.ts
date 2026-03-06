@@ -1,5 +1,5 @@
-import { CoreGameState, placeHQ } from "../../../shared";
-import type { GameMapDefinition } from "../../../shared/maps/types";
+import { CoreGameState, placeHQ } from "../../../system";
+import type { GameMapDefinition } from "../../../system/maps/types";
 
 
 function shuffle<T>(arr: T[]) {

@@ -1,5 +1,5 @@
 
-import type { CoreGameState } from "./state";
+import type { CoreGameState } from "../system/core/state.js";
 
 export type WireState = {
   tiles: any[];

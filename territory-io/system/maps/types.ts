@@ -1,5 +1,5 @@
 // shared/maps/types.ts
-import type { TerrainType } from "./terrain";
+import type { TerrainType } from "../../shared";
 
 export interface MapHex {
   q: number;

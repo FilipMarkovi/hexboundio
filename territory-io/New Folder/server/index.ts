@@ -15,7 +15,7 @@ import {
   setPlayer,
   STARTING_GOLD, STARTING_ARMY,
   type WireState
-} from "../../shared";
+} from "../../system/index.js";
 import { initMap } from "./init/initMap";
 import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";

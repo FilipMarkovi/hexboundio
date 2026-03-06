@@ -1,7 +1,13 @@
 import type { CoreGameState, PlayerId } from "../../../shared";
-import { neighbors } from "../../../shared";
-import { key } from "../../../shared";
+import { HEX_DIRECTIONS } from "../constants";
 
+export function key(q: number, r: number) {
+  return `${q},${r}`;
+}
+
+export function neighbors(q: number, r: number) {
+  return HEX_DIRECTIONS.map(d => ({ q: q + d.q, r: r + d.r }));
+}
 export function getConnectedTilesFromHQ_Client(
   state: CoreGameState,
   playerId: PlayerId

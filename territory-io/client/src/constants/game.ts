@@ -45,7 +45,7 @@ export const HQ_DEFENSE_SELF = 4;
 export const HQ_DEFENSE_ADJACENT = 2;
 export const FORT_DEFENSE_SELF = 2;
 export const FORT_DEFENSE_ADJACENT = 1;
-export const BARRACKS_ARMY_BONUS = 1.2;
+export const BARRACKS_ARMY_BONUS = 1;
 export const HOUSE_ARMY_CAP_BONUS = 10;
 
 // SYSTEM

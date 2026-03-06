@@ -1,4 +1,4 @@
-import { GAMER_NAMES } from "./constants";
+import { GAMER_NAMES } from "./constants.js";
 import { key } from "./state.js";
 
 export function getRandomNames(count: number): string[] {
@@ -66,3 +66,4 @@ export function getTileRing(Tq: number, Tr: number, radius: number): Set<string>
 
   return results;
 }
+

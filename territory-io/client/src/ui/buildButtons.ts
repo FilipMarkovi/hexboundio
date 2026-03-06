@@ -1,5 +1,5 @@
 import type { CoreGameState, PlayerId, BuildingType } from "../../../shared";
-import { BUILDING_COST, BUILDING_LIMIT } from "../constants";
+import { BUILDING_COST, BUILDING_LIMIT, DEMOLISH_REFUND_RATIO } from "../constants";
 import { clientUIState } from "../state/clientState";
 import { toggleBuildMode } from "./buildMode";
 
@@ -77,6 +77,7 @@ export function initBuildButtons() {
         <div style="font-weight: bold; color: #facc15; margin-bottom: 4px;">${d.label}</div>
         <div style="opacity: 0.9; line-height: 1.4;">${d.description}</div>
         <div style="opacity: 0.9; line-height: 1.4;">Building cost: ${d.cost} gold</div>
+        <div style="opacity: 0.9; line-height: 1.4;">Demolish refund: ${d.cost * DEMOLISH_REFUND_RATIO} gold</div>
       `;
       tooltip.style.display = "block";
       const rect = btn.getBoundingClientRect();

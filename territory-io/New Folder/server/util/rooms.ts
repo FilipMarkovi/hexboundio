@@ -1,7 +1,7 @@
-import { CoreGameState, PlayerId, MAPS } from "../../../shared";
+import { CoreGameState, PlayerId, MAPS } from "../../../system";
 import crypto from "node:crypto";
-import { createGameState } from "../../../shared";
-import { butterflyMap } from "../../../shared/maps/instances/butterflyMap.js";
+import { createGameState } from "../../../system";
+import { butterflyMap } from "../../../system/maps/instances/butterflyMap.js";
 
 export type RoomId = string;
 

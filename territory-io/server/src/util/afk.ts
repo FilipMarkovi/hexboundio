@@ -1,5 +1,5 @@
-import { CoreGameState, PlayerId,PING_TIMEOUT,handlePlayerDeath, checkGameOver } from "../../../shared";
-
+import { CoreGameState, PING_TIMEOUT,handlePlayerDeath, checkGameOver } from "../../../system";
+import { PlayerId } from "../../../shared";
 export function checkAFKPlayers(
   state: CoreGameState,
   now: number,

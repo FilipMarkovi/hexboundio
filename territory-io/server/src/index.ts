@@ -2,25 +2,23 @@ import { WebSocket, WebSocketServer } from "ws";
 import { checkAFKPlayers } from "./util/afk.js";
 import crypto from "node:crypto";
 import {
-  createGameState,
   applyIntent,
   tick,
   serializeState,
   MAPS,
-  PlayerId,
   handlePlayerDeath,
-  CoreGameState,
   PLAYER_COLORS,
   setPlayer,
   STARTING_GOLD, STARTING_ARMY, TICK_RATE,
-  type WireState
-} from "../../shared";
+  type WireState,
+  checkGameOver
+} from "../../system/index.js";
 import { initMap } from "./init/initMap";
 import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager";
 import { handleQueueBots } from "./ai/queueBotManager";
-
+import { PlayerId } from "../../shared";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +48,7 @@ const rooms = new Map<RoomId, GameRoom>();
 let queueRoomId: RoomId;
 const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
 const sockets = new Map<PlayerId, WebSocket>();
+const intentHistory = new Map<PlayerId, number[]>();
 
 const wss = new WebSocketServer({ server });
 let last = Date.now();
@@ -57,6 +56,32 @@ let reset = true;
 ;
 const first = createRoom(rooms);
 queueRoomId = first.id;
+
+export function sendPlayerLog(playerId: string, text: string, color: string = "#ffffff") {
+  const socket = sockets.get(playerId);
+  if (socket && socket.readyState === 1) {
+    socket.send(JSON.stringify({
+      type: "LOG",
+      text,
+      color
+    }));
+  }
+}
+
+/**
+ * Sends a log message to everyone in a specific room
+ */
+export function broadcastRoomLog(room: GameRoom, text: string, color: string = "#ffffff") {
+  const msg = JSON.stringify({ type: "LOG", text, color });
+  
+  room.playerIds.forEach(id => {
+    const socket = sockets.get(id);
+    if (socket && socket.readyState === 1) {
+      socket.send(msg);
+    }
+  });
+}
+
 
 function getQueueRoom(): GameRoom {
   let room = rooms.get(queueRoomId);
@@ -230,9 +255,10 @@ setInterval(() => {
     if (bot_tick == 0)
       runBots(room);
     tick(room.state, dt);
+    checkGameOver(room.state)
     broadcastRoomState(room);
   }
-  //console.log("tick time: ",Date.now() - now)
+  //console.log("tick time: ",Date.now() - now, ", Rooms count: ", rooms.size, " Player count: ", playerRoom.size)
 }, TICK_RATE);
  
 
@@ -248,9 +274,21 @@ wss.on("connection", (ws, req) => {
   }));
 
   ws.on("message", (buf) => {
+    const now = Date.now();
+    let history = intentHistory.get(playerId) || [];
+      // Filter out timestamps older than 1 second
+    history = history.filter(time => now - time < 1000);
+    
+    if (history.length >= 10) {
+      // ws.send(JSON.stringify({ type: "ERROR", msg: "Too many actions!" }));
+      return; 
+    }
+    history.push(now);
+    intentHistory.set(playerId, history);
+
     let msg: ClientMsg | null = null;
     try { msg = JSON.parse(buf.toString()); } catch { return; }
-    if (!msg || msg.type !== "INTENT") return;
+    if (!msg || msg.type !== "INTENT" || !msg.intent) return;
 
     const intent = msg.intent;
 
@@ -289,6 +327,7 @@ wss.on("connection", (ws, req) => {
 
   ws.on("close", () => {
     sockets.delete(playerId);
+    intentHistory.delete(playerId);
 
     const rid = playerRoom.get(playerId);
     if (!rid) {

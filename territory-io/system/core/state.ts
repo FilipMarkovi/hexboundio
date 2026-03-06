@@ -1,5 +1,5 @@
 
-import type { PlayerId, PlayerState, TileState } from "../types/gameTypes";
+import type { PlayerId, PlayerState, TileState } from "../../shared/index.js";
 import { getConnectedTilesFromHQ } from "./systems.js";
 export interface CoreGameState {
   tiles: Map<string, TileState>;
@@ -9,7 +9,7 @@ export interface CoreGameState {
   connectedCache?: Map<PlayerId, Set<string>> | null;
   mapId: null | string;
   mapName: null | string;
-}
+} // copy in shared
 
 export function createGameState(): CoreGameState {
   return {

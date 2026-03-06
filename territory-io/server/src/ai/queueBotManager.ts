@@ -9,7 +9,7 @@ import {
   STARTING_ARMY,
   getRandomNames,
   TIME_TO_AI_AUTOFILL,
-} from "../../../shared";
+} from "../../../system";
 import { broadcastLobby,startMatchIfReady } from "../index.js";
 import { start } from "node:repl";
 

@@ -1,5 +1,5 @@
-import type { GameMapDefinition } from "./types";
-import { TerrainType } from "./terrain.js";
+import type { GameMapDefinition } from "./types.js";
+import { TerrainType } from "../../shared"
 const CHAR_TO_TERRAIN: Record<string, TerrainType | null> = {
   G: "GRASS",
   M: "MOUNTAIN",

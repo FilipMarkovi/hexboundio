@@ -1,9 +1,7 @@
-import { CoreGameState, PlayerId, MAPS } from "../../../shared";
+import { CoreGameState, MAPS } from "../../../system";
+import { PlayerId } from "../../../shared";
 import crypto from "node:crypto";
-import { createGameState } from "../../../shared";
-import { butterflyMap } from "../../../shared/maps/instances/butterflyMap.js";
-import { mountainsMap } from "../../../shared/maps/instances/mountainsMap";
-import { eightWayMap } from "../../../shared/maps/instances/eightWayMap";
+import { createGameState } from "../../../system";
 
 export type RoomId = string;
 
@@ -26,13 +24,13 @@ type WeightedMap = {
 const MAP_POOL: WeightedMap[] =
   Array.from(MAPS.keys()).map((id): WeightedMap => ({
     id: id as string,
-    weight: 0,
+    weight: 1,
   }));
 
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  octagon: 1,
+  //amazon: 1,
 };
 
 for (const m of MAP_POOL) {

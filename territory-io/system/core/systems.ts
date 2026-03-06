@@ -1,16 +1,16 @@
 
 import { isNumberObject } from "node:util/types";
-import type { PlayerId, TileState, BuildingType } from "../types/gameTypes";
+import type { PlayerId, TileState, BuildingType } from "../../shared/index.js";
 import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
    HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
     GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
      DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
     DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
-  PLAYER_KILL_GOLD_REWARD} from "./constants";
-import type { CoreGameState } from "./state";
-import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state";
-
+  PLAYER_KILL_GOLD_REWARD} from "./constants.js";
+import type { CoreGameState } from "./state.js";
+import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
+import { sendPlayerLog } from "../../server/src/index.js";
 
 export type Intent =
   | { type: "CAPTURE"; q: number; r: number }
@@ -259,8 +259,10 @@ export function tick(state: CoreGameState, dt: number) {
             }
           }
         }
-        if(attackingPlayer && !t.ownerId)
+        if(attackingPlayer && !t.ownerId){
           attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense)
+          sendPlayerLog(attackingPlayer.id, `+${NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense} Gold (Tile Captured)`, "#eab308");  
+        }
         
         t.ownerId = by;
         t.defenseHeat = 0;
@@ -271,8 +273,10 @@ export function tick(state: CoreGameState, dt: number) {
 
         if (wasHQ && prevOwner && prevOwner !== by) {
           handlePlayerDeath(state, prevOwner);
-          if(attackingPlayer)
+          if(attackingPlayer){
             attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + PLAYER_KILL_GOLD_REWARD)
+            sendPlayerLog(attackingPlayer.id, `+${PLAYER_KILL_GOLD_REWARD} Gold (Eliminated Player)`, "#eab308");  
+          }
         }
       }
       
@@ -359,19 +363,19 @@ export function handlePlayerDeath(
 export function checkGameOver(state: CoreGameState) {
   let aliveCount = 0;
   let lastAliveUsername: string | null = null;
-  let realPlayerCount = 0;
+  let realPlayerInRoom = 0;
   for (const p of state.players.values()) {
+    if(!p.isBot) realPlayerInRoom++;
     if (p.status === "PLAYING" && !p.eliminated) {
       aliveCount += 1;
       lastAliveUsername = p.username;
-      if(!p.isBot) realPlayerCount++;
     }
   }
 
   if ((aliveCount <= 1 && lastAliveUsername)) {
     state.gameOver = { winner: lastAliveUsername };
   }
-  if (realPlayerCount <= 0) {
+  if (realPlayerInRoom <= 0) {
     if (lastAliveUsername)
       state.gameOver = { winner: lastAliveUsername };
     else

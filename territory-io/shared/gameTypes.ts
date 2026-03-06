@@ -1,4 +1,8 @@
-import { TerrainType } from "../maps/terrain.js";
+export type TerrainType =
+  | "GRASS"
+  | "MOUNTAIN"
+  | "BEDROCK"
+  | "ROCK";
 
 export type PlayerId = string
 
@@ -56,3 +60,12 @@ export interface PlayerState {
 
 }
 
+export interface CoreGameState {
+  tiles: Map<string, TileState>;
+  players: Map<PlayerId, PlayerState>;
+  started: boolean;
+  gameOver: null | { winner: PlayerId; };
+  connectedCache?: Map<PlayerId, Set<string>> | null;
+  mapId: null | string;
+  mapName: null | string;
+}

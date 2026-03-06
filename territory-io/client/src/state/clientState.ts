@@ -1,6 +1,5 @@
 
 import type { CoreGameState } from "../../../shared";
-import type { BuildingType } from "../../../shared";
 
 export const clientUIState = {
   selectedBuilding: null as any,

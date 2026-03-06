@@ -1,92 +1,12 @@
 // server/ai/simpleExpandBot.ts
 
-import { get } from "node:http";
-import { CoreGameState, PlayerId, nonOwnedNeighbors, getConnectedTilesFromHQ, neighborTiles, getTile,
-   BUILDING_COST, BUILDING_LIMIT, hexDistance, TileState, PIVOT_DIST, STEEPNESS, key, Intent, canStartCapture,} from "../../../shared";
+import { CoreGameState, nonOwnedNeighbors, getConnectedTilesFromHQ, neighborTiles, getTile,
+   BUILDING_COST, BUILDING_LIMIT, hexDistance, PIVOT_DIST, STEEPNESS, key, Intent, canStartCapture,
+  ARMY_CAP_PER_TILE, BASE_ARMY_MAX, HOUSE_ARMY_CAP_BONUS} from "../../../system";
+import { PlayerId, TileState } from "../../../shared";
 import { shuffle } from "../init/spawnPlayersFromMap.js";
 
-export function dumbAI(
-  state: CoreGameState,
-  botId: PlayerId
-): Intent {
-  const bot = state.players.get(botId);
-  if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
-
-  // Collect owned tiles
-  const ownedTiles = [...getConnectedTilesFromHQ(state, botId)];
-
-  if (ownedTiles.length === 0) return null;
-  shuffle(ownedTiles);
-
-  for (const tileAxial of ownedTiles){
-    const ownedTile = state.tiles.get(tileAxial);
-    if (!ownedTile) continue;
-    let validTargets = nonOwnedNeighbors(state, ownedTile.q, ownedTile.r, botId);
-    if (validTargets.length == 0) continue;
-
-    const target =
-        validTargets[Math.floor(Math.random() * validTargets.length)];
-    return {
-        type: "CAPTURE",
-        q: target.q,
-        r: target.r,
-    };
-  }
-
-  return null;
-}
-
-
-export function normalAI(state: CoreGameState, botId: PlayerId): Intent {
-  const bot = state.players.get(botId);
-  if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
-
-  const hq = bot.hqPos;
-
-  // Secure HQ
-  const hqNeighbors = neighborTiles(state, hq.q, hq.r);
-  shuffle(hqNeighbors)
-  for (const tile of hqNeighbors) {
-    if (tile && tile.ownerId !== botId) {
-      return { type: "CAPTURE", q: tile.q, r: tile.r };
-    }
-  }
-
-  // Build defense
-  if (bot.gold >= BUILDING_COST["FORT"])
-    for (const tile of hqNeighbors) {
-      if (tile && !tile.building && tile.ownerId === botId) {
-          console.log("build")
-          return { type: "BUILD", q: tile.q, r: tile.r, buildingType:"FORT" };
-      }
-    }
-
-  // Smart expansion
-
-  const ownedTiles = [...getConnectedTilesFromHQ(state, botId)];
-
-  if (ownedTiles.length === 0) return null;
-  shuffle(ownedTiles);
-
-  for (const tileAxial of ownedTiles){
-    const ownedTile = state.tiles.get(tileAxial);
-    if(!ownedTile) continue;
-    let validTargets = nonOwnedNeighbors(state, ownedTile.q, ownedTile.r, botId);
-    if (validTargets.length == 0) continue;
-
-    const target =
-        validTargets[Math.floor(Math.random() * validTargets.length)];
-    return {
-        type: "CAPTURE",
-        q: target.q,
-        r: target.r,
-    };
-  }
-
-  return null;
-}
-
-export function hardAI(
+export function simpleAI(
   state: CoreGameState,
   botId: PlayerId
 ): Intent {
@@ -186,6 +106,161 @@ export function hardAI(
           };
       }
     }
+  }
+
+  return null;
+}
+
+export function smartAI(state: CoreGameState, botId: PlayerId): Intent | null {
+  const bot = state.players.get(botId);
+  if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
+
+  const hq = bot.hqPos;
+  const ownedTiles = [...getConnectedTilesFromHQ(state, botId)];
+  if (ownedTiles.length === 0) return null;
+
+  // ---------------------------------------------------------
+  // 1. MACRO ECONOMY CHECK (The 50% Army Sweet Spot)
+  // ---------------------------------------------------------
+  // Assuming you have a way to calculate max army. If not, replace with your calculation.
+  const maxArmy = (BASE_ARMY_MAX + (ownedTiles.length * ARMY_CAP_PER_TILE) + (bot.buildings.house ?? 0) * HOUSE_ARMY_CAP_BONUS); 
+  const armyRatio = bot.army / maxArmy;
+
+  const isDesperate = armyRatio < 0.2;  // Too weak, need to save troops
+  const isOptimal = armyRatio >= 0.4 && armyRatio <= 0.6; // Perfect regen zone
+  const isCapping = armyRatio > 0.75; // Army too high, wasting regen - MUST ATTACK
+
+  // ---------------------------------------------------------
+  // 2. IMMEDIATE THREAT RESPONSE (Defend)
+  // ---------------------------------------------------------
+  for (const axial of ownedTiles) {
+    const tile = state.tiles.get(axial);
+    if (!tile || !tile.capture) continue;
+
+    // Defend HQ at all costs
+    if (tile.q === hq.q && tile.r === hq.r && tile.capture.by !== botId) {
+      return { type: "DEFEND", q: tile.q, r: tile.r };
+    }
+    
+    // Defend Barracks/Forts if we have decent army
+    if (tile.building && !isDesperate && tile.capture.by !== botId) {
+      return { type: "DEFEND", q: tile.q, r: tile.r };
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 3. INFRASTRUCTURE & BUILDINGS
+  // ---------------------------------------------------------
+  // Build Barracks to boost production (prefer safe tiles near HQ)
+  if (bot.gold >= BUILDING_COST["BARRACKS"] && (bot.buildings.barracks || 0) < BUILDING_LIMIT["BARRACKS"]) {
+    const hqNeighbors = neighborTiles(state, hq.q, hq.r);
+    for (const tile of hqNeighbors) {
+      if (tile && tile.ownerId === botId && !tile.building) {
+        return { type: "BUILD", q: tile.q, r: tile.r, buildingType: "BARRACKS" };
+      }
+    }
+  }
+
+  // Build Forts on borders if we are rich but getting attacked
+  if (bot.gold >= BUILDING_COST["FORT"] && (bot.buildings.fort || 0) < BUILDING_LIMIT["FORT"]) {
+    // Find a border tile (owned tile with non-owned neighbors)
+    for (const axial of ownedTiles) {
+      const tile = state.tiles.get(axial)
+      if(!tile) continue
+      const neighbors = nonOwnedNeighbors(state, tile.q, tile.r, botId);
+      if (neighbors.length > 0) {
+        const tile = state.tiles.get(axial);
+        if (tile && !tile.building) {
+          return { type: "BUILD", q: tile.q, r: tile.r, buildingType: "FORT" };
+        }
+      }
+    }
+  }
+
+  // If our army is dangerously low, do nothing and let it regenerate to 50%
+  if (isDesperate) return null;
+
+  // ---------------------------------------------------------
+  // 4. STRATEGIC TARGET SELECTION (Utility Scoring)
+  // ---------------------------------------------------------
+  let bestTarget: TileState | null = null;
+  let highestScore = -Infinity;
+
+  const uniqueTargets = new Map<string, TileState>();
+
+  // Gather all possible targets along the border
+  for (const axial of ownedTiles) {
+    const coords = axial.split(',');
+    const q = parseInt(coords[0]);
+    const r = parseInt(coords[1]);
+    
+    const neighbors = nonOwnedNeighbors(state, q, r, botId);
+    for (const n of neighbors) {
+      const target = getTile(state, n.q, n.r);
+      if (target && !target.capture) {
+        uniqueTargets.set(key(target.q, target.r), target);
+      }
+    }
+  }
+
+  // Score each target
+  for (const target of uniqueTargets.values()) {
+    if (!canStartCapture(state, botId, target.q, target.r)) continue;
+
+    let score = 100; // Base score
+    const isNeutral = !target.ownerId;
+    
+    // A. Economy & Expansion (Neutral Farming)
+    if (isNeutral) {
+      score += 50; // Good for gold
+      score -= target.defense * 3; // Prefer cheaper neutral tiles
+      
+      // If our army is getting too high, we actually WANT to hit harder tiles to burn troops
+      if (isCapping) score += target.defense * 5; 
+    }
+
+    // B. Aggression (Attacking Players)
+    if (!isNeutral) {
+      score += 80; // Incentive to hurt players
+      
+      // MASSIVE priority for enemy HQs
+      if (target.building === "HQ") {
+        score += 5000; 
+      }
+      
+      // Target weak spots in enemy armor
+      if (target.defense < bot.army * 0.3) {
+        score += 100; 
+      }
+    }
+
+    // C. Distance / Border Cohesion
+    const distFromHQ = hexDistance({ q: hq.q, r: hq.r }, { q: target.q, r: target.r });
+    score -= (distFromHQ * 2); // Prefer staying somewhat compact
+
+    // D. Aggression Modifiers based on 50% Sweet Spot
+    if (isCapping) {
+      // Must spend troops so we don't waste regen. Be highly aggressive.
+      score *= 2.0; 
+    } else if (isOptimal) {
+      // We are in the sweet spot. Only take high-value or cheap targets.
+      if (target.defense > bot.army * 0.2 && target.building !== "HQ") {
+         score *= 0.3; // De-prioritize expensive tiles unless it's an HQ
+      }
+    }
+
+    // Add slight randomness to prevent bots from getting stuck in loops
+    score += Math.random() * 20;
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestTarget = target;
+    }
+  }
+
+  // Execute the best move
+  if (bestTarget) {
+    return { type: "CAPTURE", q: bestTarget.q, r: bestTarget.r };
   }
 
   return null;

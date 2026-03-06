@@ -5,9 +5,9 @@ import { camera } from "./camera";
 import { getStripePattern } from "./patterns";
 import { FILL_ALPHA } from "../constants";
 import { darken } from "./playerColors";
-import { DEFENSE_HEAT_DECAY_MS } from "../../../shared";
-const visualProgressMap = new Map<string, number>();
-/** */
+import { DEFENSE_HEAT_DECAY_MS } from "../constants";
+
+/** 
 export function drawCaptureHex(
   ctx: CanvasRenderingContext2D,
   q: number,
@@ -65,7 +65,7 @@ export function drawCaptureHex(
   }
 
   ctx.stroke();
-}
+}*/
 
 export function drawHex(
   ctx: CanvasRenderingContext2D,
@@ -352,34 +352,29 @@ export function drawBuildingIcon(
   ctx.restore();
 }
 
-/** 
+/** */
+const visualProgressMap = new Map<string, number>();
 export function drawCaptureHex(
   ctx: CanvasRenderingContext2D,
   q: number,
   r: number,
   size: number,
   serverProgress: number, // Rename this to clarify it's the "target"
-  color: string
+  color: string,
+  deltaTime: number
 ) {
   const tileKey = `${q},${r}`;
   
   // 1. Get the last "smooth" value we drew
-  let visualProgress = visualProgressMap.get(tileKey) ?? serverProgress;
+  let visualProgress = visualProgressMap.get(tileKey) ?? 0;
+  if (serverProgress === 0 || visualProgress > serverProgress) visualProgress = 0;
 
-  // 2. The "Chase" - Move visual progress 10% of the way to server progress every frame
-  // This creates a smooth 60fps sliding effect
-  const lerpSpeed = 0.15; 
+  // 2. The chase
+  const lerpSpeed = 10 * deltaTime; 
   visualProgress += (serverProgress - visualProgress) * lerpSpeed;
-
-  // 3. Logic to handle resets (if capture stops or flips to a new owner)
-  if (Math.abs(serverProgress - visualProgress) > 0.5 || serverProgress === 0) {
-    visualProgress = serverProgress;
-  }
   
   // Save the new smooth value for the next frame
   visualProgressMap.set(tileKey, visualProgress);
-
-  // --- REST OF THE FUNCTION REMAINS THE SAME, JUST USE visualProgress ---
 
   const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
   const worldY = size * (3 / 2 * r);
@@ -421,4 +416,4 @@ export function drawCaptureHex(
   }
 
   ctx.stroke();
-}*/
+}
