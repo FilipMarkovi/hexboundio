@@ -2,7 +2,10 @@ export type TerrainType =
   | "GRASS"
   | "MOUNTAIN"
   | "BEDROCK"
-  | "ROCK";
+  | "DESERT"
+  | "WATER";
+
+export type GamePhase = "HQ_PLACEMENT" | "GAMEPLAY";
 
 export type PlayerId = string
 
@@ -61,6 +64,7 @@ export interface PlayerState {
 }
 
 export interface CoreGameState {
+  phase: GamePhase;
   tiles: Map<string, TileState>;
   players: Map<PlayerId, PlayerState>;
   started: boolean;
@@ -68,4 +72,6 @@ export interface CoreGameState {
   connectedCache?: Map<PlayerId, Set<string>> | null;
   mapId: null | string;
   mapName: null | string;
+  HQLocations: Map<PlayerId, TileState>;
+  placementTimeLeft?: number;
 }

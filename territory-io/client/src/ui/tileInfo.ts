@@ -123,8 +123,10 @@ export function drawTileInfo(
 
 // Helper: Terrain Colors
 function getTerrainColor(t: string) {
-  if (t === "ROCK") return "#9ca3af";
-  if (t === "MOUNTAIN") return "#d1d5db";
+
+  if (t === "DESERT") return "#dd9f1b";
+  if (t === "MOUNTAIN") return "#8a8a8a";
+  if (t === "WATER") return "#257db8";
   return "#6ee7b7"; // Grass
 }
 

@@ -9,10 +9,12 @@ import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
   PLAYER_KILL_GOLD_REWARD} from "./constants.js";
 import type { CoreGameState } from "./state.js";
+import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
 import { sendPlayerLog } from "../../server/src/index.js";
 
 export type Intent =
+  | { type: "PLACE_HQ"; q: number; r: number }
   | { type: "CAPTURE"; q: number; r: number }
   | { type: "BUILD"; q: number; r: number; buildingType: string }
   | { type: "DEMOLISH"; q: number; r: number }
@@ -326,6 +328,13 @@ export function tick(state: CoreGameState, dt: number) {
 
 export function applyIntent(state: CoreGameState, playerId: PlayerId, intent: Intent) {
   if (!state.started || state.gameOver || !intent) return;
+
+  if (intent.type === "PLACE_HQ") {
+    handlePlaceHQ(state, playerId, intent.q, intent.r);
+    return;
+  }
+  if (state.phase == "HQ_PLACEMENT") return;
+
   if (intent.type === "CAPTURE") tryCapture(state, playerId, intent.q, intent.r);
   if (intent.type === "BUILD") tryBuild(state, playerId, intent.q, intent.r, intent.buildingType as BuildingType);
   if (intent.type === "DEMOLISH") handleDemolish(state, playerId, intent.q, intent.r);

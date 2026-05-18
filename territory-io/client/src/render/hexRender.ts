@@ -6,6 +6,7 @@ import { getStripePattern } from "./patterns";
 import { FILL_ALPHA } from "../constants";
 import { darken } from "./playerColors";
 import { DEFENSE_HEAT_DECAY_MS } from "../constants";
+import { tileTextures } from "./assetManager";
 
 /** 
 export function drawCaptureHex(
@@ -73,42 +74,91 @@ export function drawHex(
   r: number,
   size: number,
   baseColor: string,
-  fillAlpha = FILL_ALPHA
+  tileTerrain: string,
+  owner: string | null,
+  fillAlpha = FILL_ALPHA,
+  isHovered = false
 ): Array<[number, number]> {
-  // world position
-  const worldX = size * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r);
+
+  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
   const worldY = size * (3 / 2 * r);
   const renderSize = size * camera.zoom;
 
-  // camera transform
-  const x =
-    (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y =
-    (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
     
   const pts: Array<[number, number]> = [];
   for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i + Math.PI / 6; // rotated for pointy-top
+    const angle = (Math.PI / 3) * i + Math.PI / 6;
     pts.push([
       x + renderSize * Math.cos(angle),
       y + renderSize * Math.sin(angle)
     ]);
   }
 
+  // 3. TRACE OUTLINE PATH
   ctx.beginPath();
   ctx.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
   ctx.closePath();
 
+  if (!owner && !isHovered) {
+    // 4. LAYER 1: DRAW BACKGROUND TEXTURES (Fixed Matrix Logic)
+    let activePattern: CanvasPattern | null = null;
+    // Make sure your extensions match your exact files! (.jpg for grass)
+    if (tileTerrain === "GRASS" || tileTerrain === "G") activePattern = tileTextures.grass;
+    if (tileTerrain === "DESERT" || tileTerrain === "D") activePattern = tileTextures.desert;
+    if (tileTerrain === "MOUNTAIN" || tileTerrain === "M") activePattern = tileTextures.mountain;
+    if (tileTerrain === "WATER" || tileTerrain === "W") activePattern = tileTextures.water;
+
+    if (activePattern) {
+      ctx.save();
+      // 1. Shift canvas matrix to camera view space
+      ctx.translate(-camera.x * camera.zoom + ctx.canvas.width / 2, -camera.y * camera.zoom + ctx.canvas.height / 2);
+      
+      // 2. Adjust pattern density! Lower numbers (like 0.25) shrink the texture detail down
+      const patternDetailScale = 0.5; 
+      ctx.scale(camera.zoom * patternDetailScale, camera.zoom * patternDetailScale);
+      
+      // 3. Since the context matrix is heavily scaled down, scale up the path points to compensate
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + Math.PI / 6;
+        // Divide by patternDetailScale to ensure the boundary matches the true hex edge
+        ctx.lineTo(
+          (worldX + size * Math.cos(angle)) / patternDetailScale, 
+          (worldY + size * Math.sin(angle)) / patternDetailScale
+        );
+      }
+      ctx.closePath();
+
+      ctx.fillStyle = activePattern;
+      ctx.fill();
+      ctx.restore(); 
+    } else {
+      // Solid color fallbacks matching the brightened variants below
+      ctx.save();
+      if (tileTerrain === "DESERT" || tileTerrain === "D") ctx.fillStyle = "#e6b575";
+      else if (tileTerrain === "MOUNTAIN" || tileTerrain === "M") ctx.fillStyle = "#525252"; // Updated color fallback
+      else if (tileTerrain === "WATER" || tileTerrain === "W") ctx.fillStyle = "#1561b9";
+      else ctx.fillStyle = "#58853e";
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 5. LAYER 2: TEAM COLOR / HOVER HIGHLIGHT OVERLAY
   ctx.save();
   ctx.globalAlpha = fillAlpha;
   ctx.fillStyle = baseColor;
   ctx.fill();
   ctx.restore();
 
+  // 6. LAYER 3: GRID OUTLINES
   ctx.lineWidth = Math.min(2, 2 / camera.zoom);
   ctx.strokeStyle = "rgba(0,0,0,0.5)";
   ctx.stroke();
+
   return pts;
 }
 
@@ -145,7 +195,7 @@ export function getTileColor(args: {
   tile.ownerId ? state.players.get(tile.ownerId) : null;
 
   if (!owner) {
-    color = "#333";
+    color = "#333";;
   } else {
     color = owner.color;
   }

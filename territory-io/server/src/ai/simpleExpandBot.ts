@@ -4,7 +4,41 @@ import { CoreGameState, nonOwnedNeighbors, getConnectedTilesFromHQ, neighborTile
    BUILDING_COST, BUILDING_LIMIT, hexDistance, PIVOT_DIST, STEEPNESS, key, Intent, canStartCapture,
   ARMY_CAP_PER_TILE, BASE_ARMY_MAX, HOUSE_ARMY_CAP_BONUS} from "../../../system";
 import { PlayerId, TileState } from "../../../shared";
-import { shuffle } from "../init/spawnPlayersFromMap.js";
+
+export function shuffle<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function getValidHQPositions(state: CoreGameState, botId: PlayerId): TileState[] {
+  const validTiles: TileState[] = [];
+  const MIN_HQ_DISTANCE = 2; // Must be at least 2 tiles away from enemy spawn locations
+
+  for (const tile of state.tiles.values()) {
+    // 1. Block invalid terrain types and claimed tiles
+    if (tile.terrain === "WATER" || tile.terrain === "BEDROCK" || tile.ownerId !== null) {
+      continue;
+    }
+
+    // 2. Proximity validation check against existing HQs
+    let tooClose = false;
+    for (const [ownerId, hqTile] of state.HQLocations.entries()) {
+      if (ownerId === botId) continue; // Skip checking against self
+      
+      if (hexDistance({ q: tile.q, r: tile.r }, { q: hqTile.q, r: hqTile.r }) < MIN_HQ_DISTANCE) {
+        tooClose = true;
+        break;
+      }
+    }
+
+    if (!tooClose) {
+      validTiles.push(tile);
+    }
+  }
+  return validTiles;
+}
 
 export function simpleAI(
   state: CoreGameState,
@@ -12,6 +46,16 @@ export function simpleAI(
 ): Intent {
   const bot = state.players.get(botId);
   if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
+
+  if (state.phase === "HQ_PLACEMENT") {
+    if (state.HQLocations.has(botId)) return null;
+
+    const candidates = getValidHQPositions(state, botId);
+    if (candidates.length === 0) return null;
+
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    return { type: "PLACE_HQ", q: chosen.q, r: chosen.r };
+  }
 
   const hq = bot.hqPos;
 
@@ -114,6 +158,43 @@ export function simpleAI(
 export function smartAI(state: CoreGameState, botId: PlayerId): Intent | null {
   const bot = state.players.get(botId);
   if (!bot || bot.eliminated || bot.status !== "PLAYING") return null;
+
+  if (state.phase === "HQ_PLACEMENT") {
+    if (state.HQLocations.has(botId)) return null;
+
+    const candidates = getValidHQPositions(state, botId);
+    if (candidates.length === 0) return null;
+
+    let bestTile: TileState | null = null;
+    let highestScore = -Infinity;
+
+    // Smart AI behavior: Evaluate the quality of surrounding fields
+    for (const tile of candidates) {
+      let score = 100; // Base score
+      const neighbors = neighborTiles(state, tile.q, tile.r);
+      
+      for (const n of neighbors) {
+        if (!n) continue;
+        if (n.terrain === "GRASS") score += 15;      // High expansion land value
+        if (n.terrain === "DESERT") score += 10;     // Moderate expansion land value
+        if (n.terrain === "MOUNTAIN") score += 5;    // Defensive point
+        if (n.terrain === "WATER" || n.terrain === "BEDROCK") score -= 20; // Dead zone borders
+      }
+      
+      // Add a slight random variance to keep their starting locations organic
+      score += Math.random() * 15;
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestTile = tile;
+      }
+    }
+
+    if (bestTile) {
+      return { type: "PLACE_HQ", q: bestTile.q, r: bestTile.r };
+    }
+    return null;
+  }
 
   const hq = bot.hqPos;
   const ownedTiles = [...getConnectedTilesFromHQ(state, botId)];

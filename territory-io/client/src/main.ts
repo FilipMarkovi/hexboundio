@@ -17,6 +17,8 @@ import { getConnectedTilesFromHQ_Client } from "./utils/supply";
 import { drawTileInfo } from "./ui/tileInfo";
 import { initLobbyUI, updateLobbyUI } from "./ui/lobby";
 import { addGameLog, drawGameLogs } from "./ui/hud";
+import { loadGameTextures } from "./render/assetManager";
+import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer";
 
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
@@ -68,12 +70,14 @@ export const { sendIntent } = connect(wsUrl, {
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
+loadGameTextures(ctx, () => {});
 
 initLobbyUI(sendIntent);
 initPan(canvas);
 initZoom(canvas);
 initBuildButtons();
 initKeyboard();
+initPlacementTimerUI();
 
 
 function resize() {
@@ -128,6 +132,15 @@ const screenY = e.clientY - rect.top
 canvas.addEventListener("click", () => {
   if (clientUIState.phase !== "PLAYING") return;
   if(didDrag || !hoveredHex) return
+
+  if (clientNetState.state?.phase === "HQ_PLACEMENT") {
+    sendIntent({
+      type: "PLACE_HQ",
+      q: hoveredHex.q,
+      r: hoveredHex.r
+    });
+    return; 
+  }
 
   const selected = clientUIState.selectedBuilding;
   // BUILD MODE ACTIVE
@@ -221,6 +234,7 @@ function loop() {
   const me = clientNetState.playerId;
 
   updateLobbyUI();
+  updatePlacementTimerUI(state);
   updateBuildButtons(state, me);
 
   const canRenderMap =
@@ -270,8 +284,8 @@ function loop() {
         isCutOff,
         connectedByPlayer
       });
-
-      drawHex(ctx, tile.q, tile.r, HEX_SIZE, color, fillAlpha);
+      const isTileHovered = (hoveredHex?.q === tile.q && hoveredHex?.r === tile.r);
+      drawHex(ctx, tile.q, tile.r, HEX_SIZE, color, tile.terrain, tile.ownerId, fillAlpha, isTileHovered);
       drawHexEffects(ctx, tile.q, tile.r, HEX_SIZE, tile);
       
 

@@ -1,11 +1,11 @@
 // shared/maps/index.ts
 import { GameMapDefinition } from "./types.js";
-import { octagon } from "./instances/octagon.js";
-import { amazon } from "./instances/amazon.js";
+import { barrier } from "./instances/barrier.js";
+import { oasis } from "./instances/oasis.js";
 
 export const MAPS = new Map<string, GameMapDefinition>([
-  ["octagon", octagon],
-  ["amazon", amazon]
+  ["barrier", barrier],
+  ["oasis", oasis]
 
 ]);
 

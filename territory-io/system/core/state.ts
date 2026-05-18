@@ -1,7 +1,10 @@
 
-import type { PlayerId, PlayerState, TileState } from "../../shared/index.js";
-import { getConnectedTilesFromHQ } from "./systems.js";
+import type { PlayerId, PlayerState, TileState, GamePhase } from "../../shared/index.js";
+import { getConnectedTilesFromHQ, handlePlayerDeath } from "./systems.js";
+import { MIN_HQ_DISTANCE } from "./constants.js";
+
 export interface CoreGameState {
+  phase: GamePhase;
   tiles: Map<string, TileState>;
   players: Map<PlayerId, PlayerState>;
   started: boolean;
@@ -9,10 +12,13 @@ export interface CoreGameState {
   connectedCache?: Map<PlayerId, Set<string>> | null;
   mapId: null | string;
   mapName: null | string;
+  HQLocations: Map<PlayerId, TileState>;
+  placementTimeLeft?: number;
 } // copy in shared
 
 export function createGameState(): CoreGameState {
   return {
+    phase: "HQ_PLACEMENT",
     tiles: new Map(),
     players: new Map(),
     started: false,
@@ -20,6 +26,8 @@ export function createGameState(): CoreGameState {
     connectedCache: null,
     mapId: null,
     mapName: null,
+    HQLocations: new Map(),
+    placementTimeLeft: 15,
   };
 }
 
@@ -100,4 +108,103 @@ export function hexDistance(
   const ds = (a.q + a.r) - (b.q + b.r);
 
   return (Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2;
+}
+
+export function handlePlaceHQ(
+  state: CoreGameState, 
+  playerId: PlayerId, 
+  q: number, 
+  r: number
+): { success: boolean; error?: string } {
+  
+  // 1. Enforce phase restriction
+  if (state.phase !== "HQ_PLACEMENT") {
+    return { success: false, error: "HQ placement phase has concluded." };
+  }
+
+  const tileKey = `${q},${r}`;
+  const targetTile = state.tiles.get(tileKey);
+
+  // 2. Base Validation Rules
+  if (!targetTile) return { success: false, error: "Tile does not exist." };
+  if (targetTile.terrain === "BEDROCK" || targetTile.terrain === "WATER") {
+    return { success: false, error: "Cannot establish an HQ on this terrain." };
+  }
+  
+  // If the tile is already owned by someone else
+  if (targetTile.ownerId !== null && targetTile.ownerId !== playerId) {
+    return { success: false, error: "This tile is already claimed by another player." };
+  }
+
+  // 3. PREVENTION: Check proximity to other player HQs
+  for (const [otherPlayerId, oldHQLocation] of state.HQLocations.entries()) {
+    if (otherPlayerId === playerId) continue; // Skip checking against yourself
+    
+    // Calculate axial/hex distance between the target tile and existing HQs
+    const distance = getHexDistance(q, r, oldHQLocation.q, oldHQLocation.r);
+    if (distance < MIN_HQ_DISTANCE) {
+      return { success: false, error: `Too close to an enemy HQ! Must be at least ${MIN_HQ_DISTANCE} tiles away.` };
+    }
+  }
+
+  // 4. REPLACEMENT LOGIC: Clean up old HQ if this player already placed one
+  const existingHQ = state.HQLocations.get(playerId);
+  if (existingHQ) {
+    existingHQ.ownerId = null;
+    existingHQ.building = null;
+    existingHQ.defense = 1;
+  }
+
+  // 5. Apply New HQ State (No auto-capturing surrounding ring!)
+  targetTile.ownerId = playerId;
+  targetTile.building = "HQ";
+
+  // 6. Register Location in State Caching
+  state.HQLocations.set(playerId, targetTile);
+
+  return { success: true };
+}
+
+function getHexDistance(q1: number, r1: number, q2: number, r2: number): number {
+  return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
+}
+
+export function startHQPlacementCountdown(state: CoreGameState, roomId: string) {
+  state.phase = "HQ_PLACEMENT";
+  state.started = true
+  state.placementTimeLeft = 15;
+
+  const timerInterval = setInterval(() => {
+    if (!state.placementTimeLeft) state.placementTimeLeft = 0;
+    state.placementTimeLeft--;
+
+    if (state.placementTimeLeft <= 0) {
+      clearInterval(timerInterval);
+      endHQPlacementAndEliminate(state, roomId);
+    }
+  }, 1000);
+}
+
+function endHQPlacementAndEliminate(state: CoreGameState, roomId: string) {
+
+  // 1. Identify and eliminate players who failed to place an HQ
+  for (const [playerId, player] of state.players.entries()) {
+    if (!state.HQLocations.has(playerId)) {
+      handlePlayerDeath(state, playerId)
+    }
+  }
+
+  for (const [playerId, hqTile] of state.HQLocations.entries()) {
+    const player = state.players.get(playerId);
+    if (player) {
+      player.hqPos = { q: hqTile.q, r: hqTile.r }; 
+    }
+  }
+
+  // 2. Transition Game State Phases
+  state.phase = "GAMEPLAY";
+  // 3. Clear connectivity path caches if your engine uses them to calculate map links
+  if (state.connectedCache) {
+    state.connectedCache = new Map();
+  }
 }

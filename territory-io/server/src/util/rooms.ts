@@ -30,7 +30,7 @@ const MAP_POOL: WeightedMap[] =
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  //amazon: 1,
+  //oasis: 1,
 };
 
 for (const m of MAP_POOL) {
@@ -85,7 +85,7 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
     lastTickMs: Date.now(),
     closing: false,
     mapId,
-    maxPlayers: Array.from(map.hqSpawns).length,
+    maxPlayers: map.playerCount,
   };
 
   rooms.set(id, room);

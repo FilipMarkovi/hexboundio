@@ -4,8 +4,8 @@ const CHAR_TO_TERRAIN: Record<string, TerrainType | null> = {
   G: "GRASS",
   M: "MOUNTAIN",
   B: "BEDROCK",
-  R: "ROCK",
-  H: "GRASS", // HQ spawn on grass
+  D: "DESERT",
+  W: "WATER",
   ".": null
 };
 
@@ -15,8 +15,7 @@ export function asciiToGameMap(
   name?: string
 ): GameMapDefinition {
   const hexes: GameMapDefinition["hexes"] = [];
-  const hqSpawns: GameMapDefinition["hqSpawns"] = [];
-
+  const playercount: GameMapDefinition["playerCount"] = 4;
   // remove empty lines but KEEP indentation
   const lines = ascii
     .split("\n")
@@ -42,9 +41,6 @@ export function asciiToGameMap(
 
       hexes.push({ q, r, terrain });
 
-      if (ch === "H") {
-        hqSpawns.push({ q, r });
-      }
     }
   }
 
@@ -52,6 +48,6 @@ export function asciiToGameMap(
     id,
     name: name ?? id,
     hexes,
-    hqSpawns
+    playerCount: playercount
   };
 }

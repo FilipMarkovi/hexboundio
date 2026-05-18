@@ -1,5 +1,5 @@
 28.2.2026. - add slower capture time based on territory size, significant nerf to passive gold gain, 
-add gold reward for capturing neutral tiles, add static gold reward for killing players
+add gold reward for capturing neutral tiles, add fixed gold reward for eliminating players
 ---------------------------
 1.3.2026. - replace circle capture indicator with edge fill, fix bug - gold gain when capturing player tiles,
 add key shortcut text to build buttons, improve buttons information in popup (cost),
@@ -10,4 +10,8 @@ add info about refund to build button popup, limit intent count per second to 10
 ---------------------------
 6.3.2026. - separate server systems logic from shared (now there is system and shared directories), add smartAI,
 add game log to UI, fix where if only bots remain room still runs when player spectates-
- but when no players are left terminate room, keep only 2 good big maps, somewhat fix capture smoothness
+ but when no players are left terminate room, keep only 2 good big maps, semi-fix capture smoothness
+---------------------------
+18.5.2026. - add option for image background for terrain types and default color per terrain type, 
+implemented python script for easier map creation, swapped ROCK terrain type for DESERT, added WATER terrain type,
+added HQ manual placement at game start for players and bots

@@ -8,13 +8,12 @@ import {
   MAPS,
   handlePlayerDeath,
   PLAYER_COLORS,
-  setPlayer,
+  setPlayer, startHQPlacementCountdown,
   STARTING_GOLD, STARTING_ARMY, TICK_RATE,
   type WireState,
   checkGameOver
 } from "../../system/index.js";
 import { initMap } from "./init/initMap";
-import { spawnPlayersFromMap } from "./init/spawnPlayersFromMap";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager";
 import { handleQueueBots } from "./ai/queueBotManager";
@@ -218,11 +217,10 @@ export function startMatchIfReady(room: GameRoom) {
     throw new Error(`Map not found at match start: ${room.mapId}`);
   }
 
-  // Init map + spawns inside this room’s state
+  // Init map
   initMap(room.state, map);
-  spawnPlayersFromMap(room.state, map);
 
-  room.state.started = true;
+  startHQPlacementCountdown(room.state, room.id)
   room.lastTickMs = Date.now();
 
   broadcastRoomState(room);

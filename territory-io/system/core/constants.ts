@@ -1,11 +1,13 @@
 const GOLD_SCALE = 1;
 
 import { TerrainType } from "../../shared";
+
 // World
 export const TERRAIN_BASE_DEFENSE: Record<TerrainType, number> = {
   GRASS: 1,
-  ROCK: 2,
+  DESERT: 2,
   MOUNTAIN: 3,
+  WATER: 999,
   BEDROCK: 999,
 };
 export const PLAYER_COLORS = [
@@ -19,6 +21,7 @@ export const PLAYER_COLORS = [
   "#f78f06",
   "#76cc30",
 ];
+export const MIN_HQ_DISTANCE = 3;
 
 // CONFLICT
 export const BASE_CAPTURE_COST = 5;

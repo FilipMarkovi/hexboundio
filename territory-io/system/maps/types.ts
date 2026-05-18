@@ -16,5 +16,5 @@ export interface GameMapDefinition {
   id: string;
   name: string;
   hexes: MapHex[];
-  hqSpawns: HQSpawn[];
+  playerCount: number;
 }
