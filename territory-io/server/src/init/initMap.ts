@@ -20,7 +20,8 @@ export function initMap(
     defense: TERRAIN_BASE_DEFENSE[hex.terrain],
     capture: null,
     defenseHeat: 0,
-    lastDefendedAt: 0
+    lastDefendedAt: 0,
+    effects: []
   });
   }
 

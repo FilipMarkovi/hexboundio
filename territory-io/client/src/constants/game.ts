@@ -17,12 +17,14 @@ export const BUILDING_COST = {
   BARRACKS: 30 * GOLD_SCALE,
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
+  LABORATORY: 35 * GOLD_SCALE
 } as const;
 
 export const BUILDING_LIMIT = {
   BARRACKS: 2,
   FORT: 4,
-  HOUSE: 10
+  HOUSE: 10,
+  LABORATORY: 1
 } as const;
 
 export const DEMOLISH_REFUND_RATIO = 0.5;

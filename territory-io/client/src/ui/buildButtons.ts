@@ -23,6 +23,9 @@ const defs: BtnDef[] = [
   { type: "HOUSE", key: "3", label: "House", cost: BUILDING_COST["HOUSE"], limit: BUILDING_LIMIT["HOUSE"],
     description: "Increases maximum population size."
    },
+  { type: "LABORATORY", key: "4", label: "Laboratory", cost: BUILDING_COST["LABORATORY"], limit: BUILDING_LIMIT["LABORATORY"],
+    description: "Unlocks ability to buy buffs and debuffs."
+   },
 ];
 
 const btnByType = new Map<BuildingType, HTMLButtonElement>();

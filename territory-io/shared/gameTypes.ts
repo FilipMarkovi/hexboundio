@@ -7,9 +7,18 @@ export type TerrainType =
 
 export type GamePhase = "HQ_PLACEMENT" | "GAMEPLAY";
 
+export type TileEffectType = 
+  | "SCORCH_FIRE";
+
+export interface TileEffect {
+  type: TileEffectType;
+  durationLeft: number | null; // Remaining time in seconds
+  sourcePlayerId: string | null; // The player who cast the ability
+}
+
 export type PlayerId = string
 
-export type BuildingType = "FORT" | "BARRACKS" | "HOUSE";
+export type BuildingType = "FORT" | "BARRACKS" | "HOUSE" | "LABORATORY";
 
 export type PlayerStatus =
   | "LOBBY"     // connected, not queued
@@ -41,6 +50,8 @@ export interface TileState {
     progress: number;
     cost: number;
   } | null;
+
+  effects: TileEffect[];
 }
 
 export interface PlayerState {
@@ -59,6 +70,7 @@ export interface PlayerState {
     fort: number,
     barracks: number,
     house: number,
+    laboratory: number,
   }
 
 }

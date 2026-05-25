@@ -15,3 +15,6 @@ add game log to UI, fix where if only bots remain room still runs when player sp
 18.5.2026. - add option for image background for terrain types and default color per terrain type, 
 implemented python script for easier map creation, swapped ROCK terrain type for DESERT, added WATER terrain type,
 added HQ manual placement at game start for players and bots
+---------------------------
+19.5.2026. - added base for tile effects
+---------------------------

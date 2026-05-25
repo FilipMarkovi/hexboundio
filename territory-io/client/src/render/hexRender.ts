@@ -195,7 +195,7 @@ export function getTileColor(args: {
   tile.ownerId ? state.players.get(tile.ownerId) : null;
 
   if (!owner) {
-    color = "#333";;
+    color = "#33333377";;
   } else {
     color = owner.color;
   }
@@ -377,6 +377,21 @@ export function drawBuildingIcon(
       ctx.moveTo(-s * 0.3, s * 0.9); ctx.lineTo(-s * 0.3, s * 0.4);
       ctx.arc(0, s * 0.4, s * 0.3, Math.PI, 0); 
       ctx.lineTo(s * 0.3, s * 0.9);
+      break;
+    
+    case "LABORATORY":
+      // Outer Flask Hull
+      ctx.moveTo(-s * 0.9, s * 0.8);  
+      ctx.lineTo(s * 0.9, s * 0.8);   
+      ctx.lineTo(s * 0.25, -s * 0.1);
+      ctx.lineTo(s * 0.25, -s * 0.7); 
+      ctx.lineTo(s * 0.4, -s * 0.7);  
+      ctx.lineTo(s * 0.4, -s * 0.85);
+      ctx.lineTo(-s * 0.4, -s * 0.85);
+      ctx.lineTo(-s * 0.4, -s * 0.7); 
+      ctx.lineTo(-s * 0.25, -s * 0.7)
+      ctx.lineTo(-s * 0.25, -s * 0.1)
+      ctx.closePath();
       break;
 
     case "HQ":

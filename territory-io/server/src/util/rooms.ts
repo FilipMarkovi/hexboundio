@@ -2,6 +2,7 @@ import { CoreGameState, MAPS } from "../../../system";
 import { PlayerId } from "../../../shared";
 import crypto from "node:crypto";
 import { createGameState } from "../../../system";
+import { greatriver } from "../../../system/maps/instances/thegreatriver";
 
 export type RoomId = string;
 
@@ -30,7 +31,7 @@ const MAP_POOL: WeightedMap[] =
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  //oasis: 1,
+  greatriver: 100,
 };
 
 for (const m of MAP_POOL) {

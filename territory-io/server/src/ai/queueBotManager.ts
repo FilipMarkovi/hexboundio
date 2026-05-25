@@ -67,6 +67,7 @@ function fillRoomWithBots(
         fort: 0,
         barracks: 0,
         house: 0,
+        laboratory: 0,
       }
     });
     i++;

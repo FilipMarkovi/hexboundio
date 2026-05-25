@@ -1,6 +1,6 @@
 
 import { isNumberObject } from "node:util/types";
-import type { PlayerId, TileState, BuildingType } from "../../shared/index.js";
+import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect } from "../../shared/index.js";
 import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
    HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
     GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
@@ -180,10 +180,10 @@ export function tryBuild(
   if (tile.building !== null) return false;
   if (player.gold < BUILDING_COST[buildingType]) return false;
   if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
-  if(player.buildings.barracks >= BUILDING_LIMIT[buildingType]) return false
+  const bKey = buildingType.toLowerCase() as keyof typeof player.buildings;
+  if(player.buildings[bKey] >= BUILDING_LIMIT[buildingType]) return false
 
   player.gold -= BUILDING_COST[buildingType];
-  const bKey = buildingType.toLowerCase() as keyof typeof player.buildings;
   player.buildings[bKey]++;
   tile.building = buildingType;
   if(buildingType == "FORT")
@@ -208,9 +208,24 @@ export function tick(state: CoreGameState, dt: number) {
 
   // Count connected tiles + barracks
   const ownedCount = new Map<PlayerId, number>();
-  const barracksCount = new Map<PlayerId, number>();
 
   for (const t of state.tiles.values()) {
+
+    // ==== TILE EFFECTS ====
+    if (t.effects && t.effects.length > 0) {
+      for (let i = t.effects.length - 1; i >= 0; i--) {
+        const effect = t.effects[i];
+        if (effect.durationLeft !== null){
+          effect.durationLeft -= dt;
+          
+          if (effect.durationLeft <= 0) {
+            t.effects.splice(i, 1);
+            recalcDefense(state);
+          }
+        }
+      }
+      
+    }
 
     if (t.capture) {
       const { by } = t.capture;
@@ -256,7 +271,10 @@ export function tick(state: CoreGameState, dt: number) {
               defendingPlayer.buildings.fort--;
             } else if(prevBuilding === "HQ") {
               t.building = null;
-            } else {
+            } else if (prevBuilding === "LABORATORY") {
+              defendingPlayer.buildings.laboratory--;
+              t.building = null;
+            }else {
               t.building = null;
             }
           }
@@ -475,3 +493,33 @@ export function handleDemolish(
   recalcDefense(state);
 }
 
+export function applyEffectToTile(
+  state: CoreGameState,
+  q: number,
+  r: number,
+  type: TileEffectType,
+  duration: number,
+  sourcePlayerId: string | null = null
+): boolean {
+  const tileKey = `${q},${r}`;
+  const tile = state.tiles.get(tileKey);
+  
+  if (!tile) return false; // Hex tile not found
+
+  // Check if this specific effect type is already running on the tile
+  const existingEffect = tile.effects.find((e) => e.type === type);
+
+  if (existingEffect && existingEffect.durationLeft) {
+    existingEffect.durationLeft = Math.max(existingEffect.durationLeft, duration);
+    existingEffect.sourcePlayerId = sourcePlayerId;
+  } else {
+    const newEffect: TileEffect = {
+      type,
+      durationLeft: duration,
+      sourcePlayerId
+    };
+    tile.effects.push(newEffect);
+  }
+
+  return true;
+}

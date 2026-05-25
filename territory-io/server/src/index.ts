@@ -131,6 +131,7 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
       fort: 0,
       barracks: 0,
       house: 0,
+      laboratory: 0,
     }
   });
 

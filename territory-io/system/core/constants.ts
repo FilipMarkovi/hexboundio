@@ -11,15 +11,26 @@ export const TERRAIN_BASE_DEFENSE: Record<TerrainType, number> = {
   BEDROCK: 999,
 };
 export const PLAYER_COLORS = [
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#22c55e", // green
-  "#eab308", // yellow
-  "#a855f7", // purple
-  "#14b8a6", // teal
-  "#ba1ec9",
-  "#f78f06",
+  "#3b82f6",
+  "#ef4444",
+  "#22c55e", 
+  "#eab308", 
+  "#a855f7", 
+  "#14b8a6", 
+  "#ba1ec9", 
+  "#f78f06", 
   "#76cc30",
+  "#ec4899", 
+  "#f43f5e", 
+  "#06b6d4",
+  "#6366f1", 
+  "#475569", 
+  "#f97316", 
+  "#10b981",
+  "#d946ef",
+  "#84cc16", 
+  "#1d4ed8",
+  "#b45309", 
 ];
 export const MIN_HQ_DISTANCE = 3;
 
@@ -41,28 +52,33 @@ export const MAX_ATTACKTIME_INCREASE = 1 // in seconds
 export const STARTING_GOLD = 100
 export const STARTING_ARMY = 15
 
+// Buildings
 export const BUILDING_COST = {
   BARRACKS: 30 * GOLD_SCALE,
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
+  LABORATORY: 35 * GOLD_SCALE,
 } as const;
 
 export const BUILDING_LIMIT = {
   BARRACKS: 2,
   FORT: 4,
-  HOUSE: 10
+  HOUSE: 10,
+  LABORATORY: 1,
 } as const;
 
 export const BUILDING_CONSTRUCTION_TIME = {
   BARRACKS: 8,
   FORT: 5,
-  HOUSE: 3
+  HOUSE: 3,
+  LABORATORY: 10,
 } as const;
 
 export const BUILDING_DEMOLISH_TIME = {
   BARRACKS: 10,
   FORT: 8,
-  HOUSE: 5
+  HOUSE: 5,
+  LABORATORY: 12
 } as const;
 
 export const DEMOLISH_REFUND_RATIO = 0.5;
@@ -117,7 +133,7 @@ export const GAMER_NAMES: string[] = [
   // --- COMPETITIVE / SWEATY ---
   "ShadowByte", "PixelKnight", "CyberMage", "NeonReaper", "VoidWalker",
   "AlphaZen", "RoguePulse", "IronGlimpse", "FrostWarden", "ZenithZero",
-  "SolarFlare", "LunaStatic", "StormViper", "EchoSlayer", "TitanCore",
+  "SolarFlare", "LunaStatic", "Stormv1per", "EchoSlayer", "TitanCore",
   "GlitchMaster", "RiftRunner", "NovaStrike", "CobaltRush", "AeroGhost",
   "VortexVandal", "HyperNova", "WildCard", "ApexPredator", "SilentScope",
   "FatalError", "GhostProtocol", "OmegaShift", "PrimalFury", "VectorVelocity",
@@ -125,7 +141,7 @@ export const GAMER_NAMES: string[] = [
   // --- CASUAL / FUN ---
   "MysticPanda", "GrimFable", "SleepySloth", "AngryBirdie", "DogeLord", 
   "LofiVibes", "PizzaThief", "BobaFettuccine", "TacoTuesday", "CerealKiller",
-  "DuckingGoose", "MarshmallowMadness", "PoptartPower", "BubbleTeaBot", "SofaHero",
+  "DuckingGoose", "Marshmallowmmadness", "PoptartPower", "BubbleTeaBot", "SofaHero",
   "LaundryDay", "WiFiWarrior", "Buffered", "LowBattery", "LaggyLarry",
   "ButtonMasher", "JoystickJunkie", "RespawnRepeat", "NoobSlayer99", "LeetSpoke",
 
