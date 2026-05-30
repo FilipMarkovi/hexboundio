@@ -132,7 +132,8 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
       barracks: 0,
       house: 0,
       laboratory: 0,
-    }
+    },
+    effects: []
   });
 
   room.playerIds.add(playerId);

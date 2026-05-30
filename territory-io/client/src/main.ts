@@ -2,7 +2,7 @@
 import { drawHex, getTileColor, drawCaptureHex, drawHexEffects, drawBuildingIcon } from "./render/hexRender";
 import { drawHexText } from "./render/text";
 import { pixelToAxial } from "./utils/hexMath";
-import { drawHUD,drawBuildMode } from "./ui/hud";
+import { drawHUD,drawTargetingHUD } from "./ui/hud";
 import { connect } from "./net/socket";
 import { clientNetState,clientUIState } from "./state/clientState";
 import type { CoreGameState, PlayerId } from "../../shared";
@@ -19,6 +19,7 @@ import { initLobbyUI, updateLobbyUI } from "./ui/lobby";
 import { addGameLog, drawGameLogs } from "./ui/hud";
 import { loadGameTextures } from "./render/assetManager";
 import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer";
+import { clearAbilityMode } from "./ui/abilityMode";
 
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
@@ -142,8 +143,25 @@ canvas.addEventListener("click", () => {
     return; 
   }
 
-  const selected = clientUIState.selectedBuilding;
+  // ability select mode
+  const activeAbility = clientUIState.selectedAbility;
+  if (activeAbility) {
+    const tile = clientNetState.state?.tiles.get(`${hoveredHex.q},${hoveredHex.r}`);
+
+    if (tile) {
+      sendIntent({
+        type: "BUY_PLAYER_EFFECT",
+        effectType: activeAbility,
+        targetPlayerId: tile.ownerId
+      }); 
+    }
+
+    clearAbilityMode();
+    return;
+  }
+
   // BUILD MODE ACTIVE
+  const selected = clientUIState.selectedBuilding;
   if (selected) {
     const tile = clientNetState.state?.tiles.get(
       `${hoveredHex.q},${hoveredHex.r}`
@@ -323,7 +341,7 @@ function loop() {
   }
 
   drawHUD(ctx);
-  drawBuildMode(ctx);
+  drawTargetingHUD(ctx);
   drawGameLogs(ctx)
   
 }

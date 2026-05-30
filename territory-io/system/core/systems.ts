@@ -1,13 +1,13 @@
 
 import { isNumberObject } from "node:util/types";
-import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect } from "../../shared/index.js";
+import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect, PlayerState, PlayerEffectType, PlayerEffect } from "../../shared/index.js";
 import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
    HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
     GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
      DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
     DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
-  PLAYER_KILL_GOLD_REWARD} from "./constants.js";
+  PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGHTS, EFFECT_COSTS} from "./constants.js";
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
@@ -22,6 +22,7 @@ export type Intent =
   | { type: "JOIN_QUEUE"; username: string }
   | { type: "RETURN_LOBBY" }
   | { type: "PING" }
+  | { type: "BUY_PLAYER_EFFECT"; effectType: PlayerEffectType; targetPlayerId: PlayerId }
   | null;
 
 export function captureCost(defense: number) {
@@ -203,6 +204,17 @@ export function tick(state: CoreGameState, dt: number) {
         p.id,
         computeConnectedTilesFromHQ(state, p.id)
       );
+      if(p.effects && p.effects.length > 0){
+        for (let i = p.effects.length - 1; i >= 0; i--) {
+          const effect = p.effects[i];
+          if (effect.durationLeft !== null){
+            effect.durationLeft -= dt * 1000;
+            if (effect.durationLeft <= 0){
+              p.effects.splice(i, 1);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -216,7 +228,7 @@ export function tick(state: CoreGameState, dt: number) {
       for (let i = t.effects.length - 1; i >= 0; i--) {
         const effect = t.effects[i];
         if (effect.durationLeft !== null){
-          effect.durationLeft -= dt;
+          effect.durationLeft -= dt * 1000;
           
           if (effect.durationLeft <= 0) {
             t.effects.splice(i, 1);
@@ -238,8 +250,10 @@ export function tick(state: CoreGameState, dt: number) {
       
       // capture progress (big territory = slower capture)
       const territorySize: number = state.connectedCache.get(t.ownerId!)?.size ?? 0;
+      const attackingPlayer = state.players.get(by!)
+      const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGHTS["ATTACK_SPEED"] : 1
       t.capture.progress +=
-        (CAPTURE_RATE / Math.max(1,t.defense) / 
+        ((CAPTURE_RATE * SPEED_BOOST) / Math.max(1,t.defense) / 
         (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1)) * dt;
 
       if (t.capture.progress >= 1) {
@@ -247,7 +261,6 @@ export function tick(state: CoreGameState, dt: number) {
         const prevOwner = t.ownerId;
         const prevBuilding = t.building;
         const wasHQ = t.building === "HQ";
-        const attackingPlayer = state.players.get(by!)
         // building clearing / owning
         if(prevBuilding && attackingPlayer){
           const defendingPlayer = state.players.get(String(t.ownerId))
@@ -357,6 +370,7 @@ export function applyIntent(state: CoreGameState, playerId: PlayerId, intent: In
   if (intent.type === "BUILD") tryBuild(state, playerId, intent.q, intent.r, intent.buildingType as BuildingType);
   if (intent.type === "DEMOLISH") handleDemolish(state, playerId, intent.q, intent.r);
   if (intent.type === "DEFEND") tryDefend(state, playerId, intent.q, intent.r);
+  if (intent.type === "BUY_PLAYER_EFFECT") tryBuyPlayerEffect(state, playerId, intent.effectType, intent.targetPlayerId);
   
 }
 
@@ -519,6 +533,71 @@ export function applyEffectToTile(
       sourcePlayerId
     };
     tile.effects.push(newEffect);
+  }
+
+  return true;
+}
+
+export function hasPlayerEffect(player: PlayerState | undefined, effectType: PlayerEffectType): boolean {
+  return player?.effects.some(effect => effect.type === effectType) ?? false;
+}
+
+export function tryBuyPlayerEffect(
+  state: CoreGameState,
+  casterId: PlayerId,
+  effectType: PlayerEffectType,
+  targetId: PlayerId
+) {
+  const caster = state.players.get(casterId);
+  const target = state.players.get(targetId);
+
+
+  if (!caster || caster.eliminated || !target || target.eliminated) return;
+  if ((caster.buildings.laboratory ?? 0) <= 0) {
+    return;
+  }
+  const cost = EFFECT_COSTS[effectType] ?? 9999;
+  if (caster.gold < cost) return;
+
+  // reduce gold by cost
+  caster.gold -= cost;
+  
+  const duration = EFFECT_DURATIONS[effectType] ?? 10_000;
+  applyEffectToPlayer(state, targetId, effectType, duration, casterId);
+}
+
+export function applyEffectToPlayer(
+  state: CoreGameState,
+  playerId: string,
+  type: PlayerEffectType,
+  duration: number | null,
+  sourcePlayerId: string | null = null
+): boolean {
+  const player = state.players.get(playerId);
+  
+  if (!player || player.eliminated) return false;
+
+  // Look for an existing instance of this specific effect
+  const existingEffect = player.effects.find((e) => e.type === type);
+
+  if (existingEffect) {
+    if (duration === null) {
+      // If the new effect is permanent, overwrite the timer entirely
+      existingEffect.durationLeft = null;
+    } else if (existingEffect.durationLeft !== null) {
+      // If both are timed, refresh to whichever duration is longer
+      existingEffect.durationLeft = Math.max(existingEffect.durationLeft, duration);
+    }
+    // Update who cast/triggered the modification last
+    existingEffect.sourcePlayerId = sourcePlayerId;
+  } else {
+    // Add a fresh effect object to the collection
+    const newEffect: PlayerEffect = {
+      type,
+      durationLeft: duration,
+      sourcePlayerId
+    };
+    player.effects.push(newEffect);
   }
 
   return true;

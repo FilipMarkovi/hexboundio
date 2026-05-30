@@ -152,7 +152,7 @@ export function handlePlaceHQ(
   if (existingHQ) {
     existingHQ.ownerId = null;
     existingHQ.building = null;
-    existingHQ.defense = 1;
+    existingHQ.defense = existingHQ.baseDefense;
   }
 
   // 5. Apply New HQ State (No auto-capturing surrounding ring!)
@@ -207,4 +207,5 @@ function endHQPlacementAndEliminate(state: CoreGameState, roomId: string) {
   if (state.connectedCache) {
     state.connectedCache = new Map();
   }
+  
 }

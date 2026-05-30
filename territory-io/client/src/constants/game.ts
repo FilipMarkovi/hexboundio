@@ -9,6 +9,20 @@ export const DEFENSE_HEAT_DECAY_MS = 10000; // 10 seconds to reset
 export const DEFENSE_COST_INCREMENT = 0.2;  // +20% cost per click
 export const TILE_ATTACK_COOLDOWN = 1000;
 
+// effects
+export const EFFECT_COSTS = {
+  ATTACK_SPEED: 30 * GOLD_SCALE
+}
+
+export const EFFECT_DURATIONS = { // null for permanent
+  ATTACK_SPEED: 30_000 // 30s
+}
+
+//effect strenghts
+export const EFFECT_STRENGHTS = {
+  ATTACK_SPEED: 1.5, // multiplier for player attack speed
+} 
+
 // Economy
 export const STARTING_GOLD = 10 * GOLD_SCALE
 export const STARTING_ARMY = 1000
@@ -17,7 +31,7 @@ export const BUILDING_COST = {
   BARRACKS: 30 * GOLD_SCALE,
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
-  LABORATORY: 35 * GOLD_SCALE
+  LABORATORY: 50 * GOLD_SCALE
 } as const;
 
 export const BUILDING_LIMIT = {

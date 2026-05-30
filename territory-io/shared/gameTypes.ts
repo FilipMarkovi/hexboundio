@@ -16,6 +16,15 @@ export interface TileEffect {
   sourcePlayerId: string | null; // The player who cast the ability
 }
 
+export type PlayerEffectType = 
+  | "ATTACK_SPEED";
+
+export interface PlayerEffect {
+  type: PlayerEffectType;
+  durationLeft: number | null; // Remaining time in seconds
+  sourcePlayerId: string | null; // The player who cast the ability
+}
+
 export type PlayerId = string
 
 export type BuildingType = "FORT" | "BARRACKS" | "HOUSE" | "LABORATORY";
@@ -73,6 +82,7 @@ export interface PlayerState {
     laboratory: number,
   }
 
+  effects: PlayerEffect[]
 }
 
 export interface CoreGameState {

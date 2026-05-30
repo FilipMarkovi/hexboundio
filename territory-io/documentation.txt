@@ -18,3 +18,8 @@ added HQ manual placement at game start for players and bots
 ---------------------------
 19.5.2026. - added base for tile effects
 ---------------------------
+25.5.2026. - added laboratory building (no functions), added base for player effects
+---------------------------
+30.5.2026. - fully implemented player effects with 1 functioning effect (attack speed buff) !players can give
+(de)buffs to anyone, improved UI when selecting building/ability, fixed player effects to use miliseconds, fixed
+player effects so they properly expire now

@@ -34,6 +34,21 @@ export const PLAYER_COLORS = [
 ];
 export const MIN_HQ_DISTANCE = 3;
 
+// EFFECTS
+//durations:
+export const EFFECT_COSTS = {
+  ATTACK_SPEED: 30 * GOLD_SCALE
+}
+
+export const EFFECT_DURATIONS = { // null for permanent
+  ATTACK_SPEED: 30_000 // 30s
+}
+
+//effect strenghts
+export const EFFECT_STRENGHTS = {
+  ATTACK_SPEED: 1.5, // multiplier for player attack speed
+} 
+
 // CONFLICT
 export const BASE_CAPTURE_COST = 5;
 export const CAPTURE_RATE = 1;
@@ -57,7 +72,7 @@ export const BUILDING_COST = {
   BARRACKS: 30 * GOLD_SCALE,
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
-  LABORATORY: 35 * GOLD_SCALE,
+  LABORATORY: 50 * GOLD_SCALE,
 } as const;
 
 export const BUILDING_LIMIT = {

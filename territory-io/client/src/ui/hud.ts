@@ -136,30 +136,55 @@ export function drawHUD(ctx: CanvasRenderingContext2D) {
   }
 }
 
-export function drawBuildMode(ctx: CanvasRenderingContext2D) {
-  if (!clientUIState.selectedBuilding) return;
+export function drawTargetingHUD(ctx: CanvasRenderingContext2D) {
+  const building = clientUIState.selectedBuilding;
+  const ability = clientUIState.selectedAbility;
 
-  const text = `🔨 CONSTRUCTING: ${clientUIState.selectedBuilding}`;
-  ctx.font = "bold 14px sans-serif";
-  const metrics = ctx.measureText(text);
-  const padding = 20;
-  const w = metrics.width + padding * 2;
-  
-  // Center the bar at the top
-  const x = (ctx.canvas.width - w) / 2;
+  if (!building && !ability) return;
 
-  ctx.fillStyle = "rgba(0,0,0,0.8)";
-  roundRect(ctx, x, 10, w, 30, 15);
-  ctx.fill();
-  ctx.strokeStyle = "#fff";
+  ctx.save();
+
+  const pulse = 0.6 + Math.sin(Date.now() * 0.004) * 0.4;
+
+  const titleText = building ? `🔨 CONSTRUCTING ${building}` : `🧪 CASTING ${ability!.replace("_", " ")}`;
+  const titleColor = building ? "#60a5fa" : "#c084fc"; // Blue for structural, Purple for tech
+  const accentColor = building ? "rgba(59, 130, 246, 1)" : `rgba(168, 85, 247, ${pulse})`;
+
+  // Calculate layout dynamics dynamically based on text width
+  ctx.font = "bold 13px sans-serif";
+  const boxWidth = Math.max(320, ctx.measureText(titleText).width + 48);
+  const boxHeight = 46;
+  const x = (ctx.canvas.width - boxWidth) / 2;
+  const y = 16;
+
+  // 1. Draw the sleek translucent core container card
+  ctx.fillStyle = "rgba(15, 23, 42, 0.93)"; // Deep premium slate
+  ctx.fillRect(x, y, boxWidth, boxHeight);
+
+  // 2. Draw surrounding safety boundary glow
+  ctx.strokeStyle = building ? "rgba(255, 255, 255, 0.12)" : `rgba(168, 85, 247, ${pulse * 0.4})`;
   ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.strokeRect(x, y, boxWidth, boxHeight);
 
-  ctx.fillStyle = "#fff";
+  // 3. Draw the top branding accent line strip
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(x, y, boxWidth, 3);
+
+  // 4. Render typography instructions centrally
   ctx.textAlign = "center";
-  ctx.fillText(text, ctx.canvas.width / 2, 30);
-  
-  ctx.font = "10px sans-serif";
+  ctx.textBaseline = "middle";
+
+  // Mode Header Text
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillStyle = titleColor;
+  ctx.fillText(titleText, ctx.canvas.width / 2, y + 16);
+
+  // Action Cancel Subtext Guide
+  ctx.font = "500 10px sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.fillText("Click target hex to deploy • [ESC] Cancel", ctx.canvas.width / 2, y + 32);
+
+  ctx.restore();
 }
 
 interface GameLogMessage {

@@ -68,7 +68,8 @@ function fillRoomWithBots(
         barracks: 0,
         house: 0,
         laboratory: 0,
-      }
+      },
+      effects: []
     });
     i++;
 

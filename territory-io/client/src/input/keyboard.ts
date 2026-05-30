@@ -1,4 +1,6 @@
-import { toggleBuildMode } from "../ui/buildMode";
+import { toggleBuildMode, clearBuildMode } from "../ui/buildMode";
+import { toggleAbilityMode, clearAbilityMode } from "../ui/abilityMode";
+
 
 export function initKeyboard() {
   window.addEventListener("keydown", (e) => {
@@ -8,5 +10,11 @@ export function initKeyboard() {
     if (e.key === "2") toggleBuildMode("BARRACKS");
     if (e.key === "3") toggleBuildMode("HOUSE");
     if (e.key === "4") toggleBuildMode("LABORATORY");
+    if (e.key === "r") toggleAbilityMode("ATTACK_SPEED")
+
+    if (e.key === "Escape") {
+      clearBuildMode();
+      clearAbilityMode();
+    }
   });
 }

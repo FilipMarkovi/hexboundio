@@ -3,6 +3,7 @@ import type { CoreGameState } from "../../../shared";
 
 export const clientUIState = {
   selectedBuilding: null as any,
+  selectedAbility: null as any,
   phase: "LOBBY" as "LOBBY" | "QUEUED" | "PLAYING" | "GAME_OVER",
   username: "",
 };

@@ -25,6 +25,9 @@ export function toggleBuildMode(type: BuildingType) {
   // not enough gold or limit reached skip
   if (player.gold < cost || (player.buildings[countkey] >= getLimit(type))) return;
 
+  // clear ability so they cant build and buy ability at the same time
+  clientUIState.selectedAbility = null;
+
   // Toggle behavior
   if (clientUIState.selectedBuilding === type) {
     clientUIState.selectedBuilding = null;
