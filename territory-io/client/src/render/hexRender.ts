@@ -394,7 +394,70 @@ export function drawBuildingIcon(
       ctx.closePath();
       break;
 
-    case "HQ":
+      case "SIEGE_OUTPOST":
+            // Scaled-Up, Bold Right-Facing Cannon (No flag, maximized size)
+            
+            // ==========================================
+            // LAYER 1: THE CARRIAGE TRAIL (Swept further left and down)
+            // ==========================================
+            ctx.beginPath();
+            ctx.moveTo(0, s * 0.45); 
+            // Sweeps back further to -s * 0.85 to anchor the larger size
+            ctx.quadraticCurveTo(-s * 0.5, s * 0.45, -s * 0.85, s * 0.85);
+            ctx.lineTo(-s * 0.65, s * 0.85);
+            ctx.quadraticCurveTo(-s * 0.3, s * 0.5, 0, s * 0.45);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // ==========================================
+            // LAYER 2: THE CANNON BARREL (Thicker and longer)
+            // ==========================================
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.65, s * 0.3);   // Breech shifted further left
+            ctx.lineTo(-s * 0.48, s * 0.0);   
+            ctx.lineTo(s * 0.75, -s * 0.5);   // Muzzle extended much further up-right
+            
+            // Enlarged Muzzle Flare Ring
+            ctx.lineTo(s * 0.7, -s * 0.58);
+            ctx.lineTo(s * 0.83, -s * 0.64);
+            ctx.lineTo(s * 0.96, -s * 0.38);
+            ctx.lineTo(s * 0.83, -s * 0.32);
+            
+            ctx.lineTo(s * 0.58, -s * 0.2);   // Bottom barrel line
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Cascabel (Enlarged breech knob)
+            ctx.beginPath();
+            ctx.arc(-s * 0.6, s * 0.17, s * 0.09, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // ==========================================
+            // LAYER 3: THE WHEEL (Blown up from 0.3s to 0.45s)
+            // ==========================================
+            ctx.beginPath();
+            ctx.arc(0, s * 0.45, s * 0.45, 0, Math.PI * 2); // Massive outer rim
+            ctx.fill();
+            ctx.stroke();
+
+            // Hub & Spoke details scaled to match the massive wheel
+            ctx.beginPath();
+            ctx.arc(0, s * 0.45, s * 0.11, 0, Math.PI * 2); // Bigger center hubcap
+            ctx.stroke();
+
+            // Geometric Cross Spokes extended to the new wheel edges
+            ctx.moveTo(-s * 0.45, s * 0.45); ctx.lineTo(s * 0.45, s * 0.45); // Horizontal
+            ctx.moveTo(0, s * 0.0);          ctx.lineTo(0, s * 0.9);          // Vertical
+            ctx.stroke();
+
+            // CRITICAL: Reset the path layout so the global script doesn't double-draw
+            ctx.beginPath();
+            break;
+            
+      case "HQ":
       // Majestic Crown
       ctx.moveTo(-s * 0.7, s * 0.8); ctx.lineTo(s * 0.7, s * 0.8); // Flat base
       ctx.lineTo(s * 0.9, -s * 0.5); // Right edge up

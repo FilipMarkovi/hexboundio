@@ -18,6 +18,7 @@ const defs: BtnDef[] = [
   { type: "BARRACKS", key: "2", label: "Barracks", cost: BUILDING_COST["BARRACKS"], limit: BUILDING_LIMIT["BARRACKS"], description: "Increases production rate of army." },
   { type: "HOUSE", key: "3", label: "House", cost: BUILDING_COST["HOUSE"], limit: BUILDING_LIMIT["HOUSE"], description: "Increases maximum population size." },
   { type: "LABORATORY", key: "4", label: "Laboratory", cost: BUILDING_COST["LABORATORY"], limit: BUILDING_LIMIT["LABORATORY"], description: "Unlocks ability to buy buffs and debuffs." },
+  { type: "SIEGE_OUTPOST", key: "5", label: "Siege Outpost", cost: BUILDING_COST["SIEGE_OUTPOST"], limit: BUILDING_LIMIT["SIEGE_OUTPOST"], description: "Offense oriented building that grants the ability to use special attacks within its range." },
 ];
 
 type ResearchDef = {
@@ -36,6 +37,14 @@ const researchDefs: ResearchDef[] = [
     label: "Stardust Catalyst", 
     cost: EFFECT_COSTS["ATTACK_SPEED"],
     description: "Instantly injects an adrenaline buff boosting tile capture speeds by 50%.",
+    isBuff: true
+  },
+  {
+    type: "ARMY_GAIN_BUFF", 
+    key: "E",
+    label: "Overclock Protocol",
+    cost: EFFECT_COSTS["ARMY_GAIN_BUFF"],
+    description: `Boost army production by 2x for ${EFFECT_DURATIONS["ARMY_GAIN_BUFF"] / 2000}s, followed by an immediate 0.5x burnout crash for ${EFFECT_DURATIONS["ARMY_GAIN_BUFF"] / 2000}s.`,
     isBuff: true
   }
 ];

@@ -30,7 +30,7 @@ export let myConTileCount: number | null = 0;
 const DRAG_THRESHOLD = 14; // pixels
 
 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsUrl = `${protocol}//${window.location.host}`;
+const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port}`;
 
 export const { sendIntent } = connect(wsUrl, {
   onWelcome: (id, requiredPlayers) => {

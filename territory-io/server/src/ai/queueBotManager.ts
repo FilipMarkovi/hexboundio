@@ -68,6 +68,7 @@ function fillRoomWithBots(
         barracks: 0,
         house: 0,
         laboratory: 0,
+        siege_outpost: 0,
       },
       effects: []
     });

@@ -11,16 +11,19 @@ export const TILE_ATTACK_COOLDOWN = 1000;
 
 // effects
 export const EFFECT_COSTS = {
-  ATTACK_SPEED: 30 * GOLD_SCALE
+  ATTACK_SPEED: 30 * GOLD_SCALE,
+  ARMY_GAIN_BUFF: 40 * GOLD_SCALE,
 }
 
 export const EFFECT_DURATIONS = { // null for permanent
-  ATTACK_SPEED: 30_000 // 30s
+  ATTACK_SPEED: 30_000, // 30s
+  ARMY_GAIN_BUFF: 30_000,
 }
 
 //effect strenghts
-export const EFFECT_STRENGHTS = {
+export const EFFECT_STRENGTHS = {
   ATTACK_SPEED: 1.5, // multiplier for player attack speed
+  ARMY_GAIN_BUFF: 2.0,
 } 
 
 // Economy
@@ -31,14 +34,32 @@ export const BUILDING_COST = {
   BARRACKS: 30 * GOLD_SCALE,
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
-  LABORATORY: 50 * GOLD_SCALE
+  LABORATORY: 50 * GOLD_SCALE,
+  SIEGE_OUTPOST: 35 * GOLD_SCALE
 } as const;
 
 export const BUILDING_LIMIT = {
   BARRACKS: 2,
   FORT: 4,
   HOUSE: 10,
-  LABORATORY: 1
+  LABORATORY: 1,
+  SIEGE_OUTPOST: 3
+} as const;
+
+export const BUILDING_CONSTRUCTION_TIME = {
+  BARRACKS: 8,
+  FORT: 5,
+  HOUSE: 3,
+  LABORATORY: 10,
+  SIEGE_OUTPOST: 12
+} as const;
+
+export const BUILDING_DEMOLISH_TIME = {
+  BARRACKS: 10,
+  FORT: 8,
+  HOUSE: 5,
+  LABORATORY: 12,
+  SIEGE_OUTPOST: 14
 } as const;
 
 export const DEMOLISH_REFUND_RATIO = 0.5;

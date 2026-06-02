@@ -7,7 +7,7 @@ import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
      DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
     DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
-  PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGHTS, EFFECT_COSTS} from "./constants.js";
+  PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGTHS, EFFECT_COSTS} from "./constants.js";
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
@@ -24,6 +24,9 @@ export type Intent =
   | { type: "PING" }
   | { type: "BUY_PLAYER_EFFECT"; effectType: PlayerEffectType; targetPlayerId: PlayerId }
   | null;
+
+const VALID_BUILDINGS = new Set<string>(Object.keys(BUILDING_COST));
+const VALID_EFFECTS = new Set<string>(Object.keys(EFFECT_COSTS));
 
 export function captureCost(defense: number) {
   return BASE_CAPTURE_COST * defense;
@@ -194,6 +197,8 @@ export function tryBuild(
 }
 
 export function tick(state: CoreGameState, dt: number) {
+  if (state.phase === "HQ_PLACEMENT") return;
+
   dt = Math.min(dt, 0.25);
   const now = Date.now()
 
@@ -251,7 +256,7 @@ export function tick(state: CoreGameState, dt: number) {
       // capture progress (big territory = slower capture)
       const territorySize: number = state.connectedCache.get(t.ownerId!)?.size ?? 0;
       const attackingPlayer = state.players.get(by!)
-      const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGHTS["ATTACK_SPEED"] : 1
+      const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1
       t.capture.progress +=
         ((CAPTURE_RATE * SPEED_BOOST) / Math.max(1,t.defense) / 
         (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1)) * dt;
@@ -287,7 +292,10 @@ export function tick(state: CoreGameState, dt: number) {
             } else if (prevBuilding === "LABORATORY") {
               defendingPlayer.buildings.laboratory--;
               t.building = null;
-            }else {
+            } else if(prevBuilding === "SIEGE_OUTPOST") {
+              t.building = null;
+              defendingPlayer.buildings.siege_outpost--;
+            } else {
               t.building = null;
             }
           }
@@ -339,6 +347,17 @@ export function tick(state: CoreGameState, dt: number) {
     const effectiveOwned = Math.max(0, owned - 1);
     const armyCap = BASE_ARMY_MAX + effectiveOwned * ARMY_CAP_PER_TILE + (p.buildings.house ?? 0) * HOUSE_ARMY_CAP_BONUS;
 
+    //army mult from effects
+    let armyEffectMult = 1.0;
+
+    const overclock = p.effects?.find(e => e.type === "ARMY_GAIN_BUFF");
+    if (overclock && overclock.durationLeft !== null) {
+      if (overclock.durationLeft > EFFECT_DURATIONS["ARMY_GAIN_BUFF"] / 2) {
+        armyEffectMult = EFFECT_STRENGTHS["ARMY_GAIN_BUFF"];
+      } else {
+        armyEffectMult = 1 / EFFECT_STRENGTHS["ARMY_GAIN_BUFF"]; 
+      }
+    }
     // gold optimum around GOLD_PEAK ratio, army optimum around ARMY_PEAK ratio
     // initial falloff is gradual, then steep toward extremes
     const ratio = armyCap > 0 ? p.army / armyCap : 0;
@@ -352,26 +371,49 @@ export function tick(state: CoreGameState, dt: number) {
 
     p.army = Math.min(
       armyCap,
-      p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS + owned * ARMY_PER_TILE) * dt * armyMult
+      p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS + owned * ARMY_PER_TILE) * dt * armyMult * armyEffectMult
     );
   }
 }
 
-export function applyIntent(state: CoreGameState, playerId: PlayerId, intent: Intent) {
-  if (!state.started || state.gameOver || !intent) return;
+export function applyIntent(state: CoreGameState, playerId: PlayerId, intent: any) {
+  if (!state?.started || state.gameOver || !intent || typeof intent !== "object") return;
 
-  if (intent.type === "PLACE_HQ") {
+  const type = intent.type;
+
+  if (type === "PLACE_HQ" && state.phase === "HQ_PLACEMENT") {
+    if (typeof intent.q !== "number" || typeof intent.r !== "number") return;
     handlePlaceHQ(state, playerId, intent.q, intent.r);
     return;
   }
-  if (state.phase == "HQ_PLACEMENT") return;
 
-  if (intent.type === "CAPTURE") tryCapture(state, playerId, intent.q, intent.r);
-  if (intent.type === "BUILD") tryBuild(state, playerId, intent.q, intent.r, intent.buildingType as BuildingType);
-  if (intent.type === "DEMOLISH") handleDemolish(state, playerId, intent.q, intent.r);
-  if (intent.type === "DEFEND") tryDefend(state, playerId, intent.q, intent.r);
-  if (intent.type === "BUY_PLAYER_EFFECT") tryBuyPlayerEffect(state, playerId, intent.effectType, intent.targetPlayerId);
-  
+  if (state.phase === "HQ_PLACEMENT") return;
+
+  // Validate Hex Coordinates for standard map actions
+  const needsCoords = ["CAPTURE", "BUILD", "DEMOLISH", "DEFEND"].includes(type);
+  if (needsCoords && (typeof intent.q !== "number" || typeof intent.r !== "number")) {
+    return; 
+  }
+
+  if (type === "CAPTURE") {
+    tryCapture(state, playerId, intent.q, intent.r);
+  } 
+  else if (type === "BUILD") {
+    if (!VALID_BUILDINGS.has(intent.buildingType)) return;
+    tryBuild(state, playerId, intent.q, intent.r, intent.buildingType as BuildingType);
+  } 
+  else if (type === "DEMOLISH") {
+    handleDemolish(state, playerId, intent.q, intent.r);
+  } 
+  else if (type === "DEFEND") {
+    tryDefend(state, playerId, intent.q, intent.r);
+  } 
+  else if (type === "BUY_PLAYER_EFFECT") {
+    if (!VALID_EFFECTS.has(intent.effectType)) return;
+    if (intent.targetPlayerId !== undefined && typeof intent.targetPlayerId !== "string") return;
+    
+    tryBuyPlayerEffect(state, playerId, intent.effectType, intent.targetPlayerId);
+  }
 }
 
 export function handlePlayerDeath(

@@ -8,7 +8,7 @@ export type TerrainType =
 export type GamePhase = "HQ_PLACEMENT" | "GAMEPLAY";
 
 export type TileEffectType = 
-  | "SCORCH_FIRE";
+  | "REINFORCED";
 
 export interface TileEffect {
   type: TileEffectType;
@@ -17,7 +17,8 @@ export interface TileEffect {
 }
 
 export type PlayerEffectType = 
-  | "ATTACK_SPEED";
+  | "ATTACK_SPEED"
+  | "ARMY_GAIN_BUFF";
 
 export interface PlayerEffect {
   type: PlayerEffectType;
@@ -27,7 +28,7 @@ export interface PlayerEffect {
 
 export type PlayerId = string
 
-export type BuildingType = "FORT" | "BARRACKS" | "HOUSE" | "LABORATORY";
+export type BuildingType = "FORT" | "BARRACKS" | "HOUSE" | "LABORATORY" | "SIEGE_OUTPOST";
 
 export type PlayerStatus =
   | "LOBBY"     // connected, not queued
@@ -80,6 +81,7 @@ export interface PlayerState {
     barracks: number,
     house: number,
     laboratory: number,
+    siege_outpost: number,
   }
 
   effects: PlayerEffect[]

@@ -1,6 +1,6 @@
 
 import type { PlayerId, PlayerState, TileState, GamePhase } from "../../shared/index.js";
-import { getConnectedTilesFromHQ, handlePlayerDeath } from "./systems.js";
+import { getConnectedTilesFromHQ, handlePlayerDeath, recalcDefense } from "./systems.js";
 import { MIN_HQ_DISTANCE } from "./constants.js";
 
 export interface CoreGameState {
@@ -136,6 +136,10 @@ export function handlePlaceHQ(
     return { success: false, error: "This tile is already claimed by another player." };
   }
 
+  if(targetTile.building !== null){
+    return { success: false, error: "This tile already has a building on it." };
+  }
+
   // 3. PREVENTION: Check proximity to other player HQs
   for (const [otherPlayerId, oldHQLocation] of state.HQLocations.entries()) {
     if (otherPlayerId === playerId) continue; // Skip checking against yourself
@@ -203,9 +207,10 @@ function endHQPlacementAndEliminate(state: CoreGameState, roomId: string) {
 
   // 2. Transition Game State Phases
   state.phase = "GAMEPLAY";
-  // 3. Clear connectivity path caches if your engine uses them to calculate map links
+
   if (state.connectedCache) {
     state.connectedCache = new Map();
   }
-  
+
+  recalcDefense(state)
 }

@@ -26,12 +26,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 6767;
+const HOST = '0.0.0.0';
 const app = express();
 app.use(express.static(path.join(__dirname, "../../client/dist")));
 app.get("*", (_, res) => {
   res.sendFile(path.join(__dirname, "../../client/dist/index.html"));
 });
-const server =app.listen(PORT, () => {
+const server =app.listen(PORT, HOST, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
@@ -67,9 +68,6 @@ export function sendPlayerLog(playerId: string, text: string, color: string = "#
   }
 }
 
-/**
- * Sends a log message to everyone in a specific room
- */
 export function broadcastRoomLog(room: GameRoom, text: string, color: string = "#ffffff") {
   const msg = JSON.stringify({ type: "LOG", text, color });
   
@@ -80,7 +78,6 @@ export function broadcastRoomLog(room: GameRoom, text: string, color: string = "
     }
   });
 }
-
 
 function getQueueRoom(): GameRoom {
   let room = rooms.get(queueRoomId);
@@ -132,6 +129,7 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
       barracks: 0,
       house: 0,
       laboratory: 0,
+      siege_outpost: 0,
     },
     effects: []
   });

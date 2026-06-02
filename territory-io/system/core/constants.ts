@@ -37,16 +37,19 @@ export const MIN_HQ_DISTANCE = 3;
 // EFFECTS
 //durations:
 export const EFFECT_COSTS = {
-  ATTACK_SPEED: 30 * GOLD_SCALE
+  ATTACK_SPEED: 30 * GOLD_SCALE,
+  ARMY_GAIN_BUFF: 40 * GOLD_SCALE,
 }
 
 export const EFFECT_DURATIONS = { // null for permanent
-  ATTACK_SPEED: 30_000 // 30s
+  ATTACK_SPEED: 30_000, // 30s
+  ARMY_GAIN_BUFF: 30_000,
 }
 
 //effect strenghts
-export const EFFECT_STRENGHTS = {
+export const EFFECT_STRENGTHS = {
   ATTACK_SPEED: 1.5, // multiplier for player attack speed
+  ARMY_GAIN_BUFF: 2.0,
 } 
 
 // CONFLICT
@@ -73,6 +76,7 @@ export const BUILDING_COST = {
   FORT: 25 * GOLD_SCALE,
   HOUSE: 20 * GOLD_SCALE,
   LABORATORY: 50 * GOLD_SCALE,
+  SIEGE_OUTPOST: 35 * GOLD_SCALE
 } as const;
 
 export const BUILDING_LIMIT = {
@@ -80,6 +84,7 @@ export const BUILDING_LIMIT = {
   FORT: 4,
   HOUSE: 10,
   LABORATORY: 1,
+  SIEGE_OUTPOST: 3
 } as const;
 
 export const BUILDING_CONSTRUCTION_TIME = {
@@ -87,13 +92,15 @@ export const BUILDING_CONSTRUCTION_TIME = {
   FORT: 5,
   HOUSE: 3,
   LABORATORY: 10,
+  SIEGE_OUTPOST: 12
 } as const;
 
 export const BUILDING_DEMOLISH_TIME = {
   BARRACKS: 10,
   FORT: 8,
   HOUSE: 5,
-  LABORATORY: 12
+  LABORATORY: 12,
+  SIEGE_OUTPOST: 14
 } as const;
 
 export const DEMOLISH_REFUND_RATIO = 0.5;
@@ -102,7 +109,7 @@ export const ARMY_CAP_PER_TILE = 2;
 export const BASE_ARMY_MAX = 40;
 export const BASE_GOLD_MAX = 100 * GOLD_SCALE;
 
-export const GOLD_PER_TILE = 0.01 * GOLD_SCALE;
+export const GOLD_PER_TILE = 1 * GOLD_SCALE;
 export const ARMY_PER_TILE = 0.02
 export const GOLD_PASSIVE = 0.1 * GOLD_SCALE;
 export const ARMY_PASSIVE = 1;

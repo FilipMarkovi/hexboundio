@@ -23,3 +23,8 @@ added HQ manual placement at game start for players and bots
 30.5.2026. - fully implemented player effects with 1 functioning effect (attack speed buff) !players can give
 (de)buffs to anyone, improved UI when selecting building/ability, fixed player effects to use miliseconds, fixed
 player effects so they properly expire now
+---------------------------
+2.6.2026. - implemented new buff for temp buffing army gain 
+(followed by imidiate same duration debuff on army gain for balance), secure applyIntent function to check for 
+necessery arguments and argument types, add imidiate update of map after hq placement ends, added Siege Outpost
+building without functionality, added info about tile and player effects to tile info when hovering
