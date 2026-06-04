@@ -24,7 +24,7 @@ jobs:
       - name: Instalacija i pokretanje Semgrep-a
         run: |
           pip install semgrep
-          semgrep --config=p/typescript --config=p/owasp-top-10 --error
+          semgrep --config=p/typescript --config=p/owasp-top-10-2021 --error
 
       # 4. Provjera ranjivosti u eksternim paketima (node_modules)
       # --audit-level=high znači da će cjevovod puknuti samo ako nađe kritične ranjivosti u paketima
