@@ -1,0 +1,32 @@
+
+name: Security Scan (TypeScript)
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Preuzimanje koda iz repozitorija
+      - name: Preuzimanje koda
+        uses: actions/checkout@v4
+
+      # 2. Postavljanje Node.js okruženja
+      - name: Postavljanje Node.js
+        uses: actions/setup-python@v4 # Semgrep se često instalira preko pip-a jer je najbrže
+
+      # 3. Instalacija i pokretanje Semgrep-a (SAST za TypeScript)
+      - name: Instalacija i pokretanje Semgrep-a
+        run: |
+          pip install semgrep
+          semgrep --config=p/typescript --config=p/owasp-top-10 --error
+
+      # 4. Provjera ranjivosti u eksternim paketima (node_modules)
+      # --audit-level=high znači da će cjevovod puknuti samo ako nađe kritične ranjivosti u paketima
+      - name: Provjera npm paketa (SCA)
+        run: npm audit --audit-level=high
