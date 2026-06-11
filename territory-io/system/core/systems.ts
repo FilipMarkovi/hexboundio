@@ -7,7 +7,8 @@ import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
      DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
     DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
-  PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGTHS, EFFECT_COSTS} from "./constants.js";
+  PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGTHS, EFFECT_COSTS, BUILDING_CONSTRUCTION_TIME,
+BUILDING_DEMOLISH_TIME} from "./constants.js";
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
@@ -181,7 +182,7 @@ export function tryBuild(
   const player = state.players.get(playerId);
   if (!tile || !player) return false;
   if (tile.ownerId !== playerId) return false;
-  if (tile.building !== null) return false;
+  if (tile.building !== null || tile.buildingAction !== null) return false;
   if (player.gold < BUILDING_COST[buildingType]) return false;
   if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
   const bKey = buildingType.toLowerCase() as keyof typeof player.buildings;
@@ -189,9 +190,13 @@ export function tryBuild(
 
   player.gold -= BUILDING_COST[buildingType];
   player.buildings[bKey]++;
-  tile.building = buildingType;
-  if(buildingType == "FORT")
-    recalcDefense(state)
+
+  const durationMs = BUILDING_CONSTRUCTION_TIME[buildingType] * 1000; // in ms
+  tile.buildingAction = {
+    building: buildingType,
+    actionType: "CONSTRUCTING",
+    readyAt: Date.now() + durationMs
+  };
 
   return true;
 }
@@ -266,6 +271,20 @@ export function tick(state: CoreGameState, dt: number) {
         const prevOwner = t.ownerId;
         const prevBuilding = t.building;
         const wasHQ = t.building === "HQ";
+
+        // if there was construction/demolishing action
+        if (t.buildingAction) {
+          if (t.buildingAction.actionType === "CONSTRUCTING" && prevOwner) {
+            const originalOwner = state.players.get(prevOwner);
+            if (originalOwner) {
+              const bKey = t.buildingAction.building.toLowerCase() as keyof typeof originalOwner.buildings;
+              originalOwner.buildings[bKey] = Math.max(0, originalOwner.buildings[bKey] - 1);
+            }
+          }
+          // Clear out the pending construction or demolition action
+          t.buildingAction = null; 
+        }
+
         // building clearing / owning
         if(prevBuilding && attackingPlayer){
           const defendingPlayer = state.players.get(String(t.ownerId))
@@ -319,6 +338,8 @@ export function tick(state: CoreGameState, dt: number) {
             sendPlayerLog(attackingPlayer.id, `+${PLAYER_KILL_GOLD_REWARD} Gold (Eliminated Player)`, "#eab308");  
           }
         }
+
+        
       }
       
     }
@@ -327,6 +348,39 @@ export function tick(state: CoreGameState, dt: number) {
     // reset heat for necessary tiles with owner
     if (now - t.lastDefendedAt > DEFENSE_HEAT_DECAY_MS) {
       t.defenseHeat = 0;
+    }
+
+    // check buildingAction for completion
+    if (t.buildingAction && now >= t.buildingAction.readyAt) {
+      const action = t.buildingAction;
+      const tileOwner = state.players.get(t.ownerId);
+
+      if (tileOwner) {
+        if (action.actionType === "CONSTRUCTING") {
+          // Finalize structure assembly
+          t.building = action.building;
+          if (action.building === "FORT") {
+            recalcDefense(state);
+          }
+        } 
+        else if (action.actionType === "DEMOLISHING") {
+          // Calculate refund values & decrement building counters upon completion
+          const cost = BUILDING_COST[action.building];
+          const refund = Math.floor(cost * DEMOLISH_REFUND_RATIO);
+          
+          tileOwner.gold = Math.min(BASE_GOLD_MAX, tileOwner.gold + refund);
+          
+          const bKey = action.building.toLowerCase() as keyof typeof tileOwner.buildings;
+          tileOwner.buildings[bKey] = Math.max(0, tileOwner.buildings[bKey] - 1);
+
+          // Clear out layout references
+          t.building = null;
+          recalcDefense(state);
+        }
+      }
+
+      // Finalize the lifecycle event
+      t.buildingAction = null;
     }
 
     const set = state.connectedCache.get(t.ownerId);
@@ -531,22 +585,19 @@ export function handleDemolish(
   const tile = getTile(state, q, r);
   if (!tile) return;
   if (tile.ownerId !== playerId) return;
-  if (!tile.building) return;
-  if (tile.building === "HQ") return;
+  if (!tile.building || tile.building === "HQ") return;
+  if (tile.buildingAction !== null) return;
+
   const player = state.players.get(playerId)
   if(!player) return;
-
   if (!isTileConnectedToHQ(state, playerId, q, r)) return;
 
-  const cost = BUILDING_COST[tile.building];
-  const refund = Math.floor(cost * DEMOLISH_REFUND_RATIO);
-
-  const key = tile.building.toLowerCase() as keyof typeof player.buildings;
-  player.buildings[key]--;
-  tile.building = null;
-  player.gold += refund;
-
-  recalcDefense(state);
+  const durationMs = BUILDING_DEMOLISH_TIME[tile.building] * 1000;
+  tile.buildingAction = {
+    building: tile.building,
+    actionType: "DEMOLISHING",
+    readyAt: Date.now() + durationMs
+  };
 }
 
 export function applyEffectToTile(
@@ -554,7 +605,7 @@ export function applyEffectToTile(
   q: number,
   r: number,
   type: TileEffectType,
-  duration: number,
+  duration: number | null,
   sourcePlayerId: string | null = null
 ): boolean {
   const tileKey = `${q},${r}`;
@@ -565,9 +616,14 @@ export function applyEffectToTile(
   // Check if this specific effect type is already running on the tile
   const existingEffect = tile.effects.find((e) => e.type === type);
 
-  if (existingEffect && existingEffect.durationLeft) {
-    existingEffect.durationLeft = Math.max(existingEffect.durationLeft, duration);
+  if (existingEffect) {
+    if (duration === null) {
+      existingEffect.durationLeft = null;
+    } else if (existingEffect.durationLeft !== null) {
+      existingEffect.durationLeft = Math.max(existingEffect.durationLeft, duration);
+    }
     existingEffect.sourcePlayerId = sourcePlayerId;
+
   } else {
     const newEffect: TileEffect = {
       type,

@@ -21,6 +21,7 @@ export function initMap(
     capture: null,
     defenseHeat: 0,
     lastDefendedAt: 0,
+    buildingAction: null,
     effects: []
   });
   }

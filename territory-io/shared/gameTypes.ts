@@ -12,7 +12,7 @@ export type TileEffectType =
 
 export interface TileEffect {
   type: TileEffectType;
-  durationLeft: number | null; // Remaining time in seconds
+  durationLeft: number | null; // Remaining time in seconds - null for permanent
   sourcePlayerId: string | null; // The player who cast the ability
 }
 
@@ -22,7 +22,7 @@ export type PlayerEffectType =
 
 export interface PlayerEffect {
   type: PlayerEffectType;
-  durationLeft: number | null; // Remaining time in seconds
+  durationLeft: number | null; // Remaining time in seconds - null for permanent
   sourcePlayerId: string | null; // The player who cast the ability
 }
 
@@ -47,7 +47,7 @@ export interface TileState {
   ownerId: PlayerId | null
   defense: number
 
-  building: "HQ" | BuildingType |  null
+  building: "HQ" | BuildingType | null
   
   terrain: TerrainType
   baseDefense: number
@@ -59,6 +59,12 @@ export interface TileState {
     by: PlayerId;
     progress: number;
     cost: number;
+  } | null;
+
+  buildingAction: {
+    building: BuildingType;
+    readyAt: number; // timestamp for Date.now()
+    actionType: "CONSTRUCTING" | "DEMOLISHING"
   } | null;
 
   effects: TileEffect[];

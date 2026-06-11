@@ -28,3 +28,8 @@ player effects so they properly expire now
 (followed by imidiate same duration debuff on army gain for balance), secure applyIntent function to check for 
 necessery arguments and argument types, add imidiate update of map after hq placement ends, added Siege Outpost
 building without functionality, added info about tile and player effects to tile info when hovering
+---------------------------
+11.6.2026. - added a more natural feel to bot actions where they no longer all simultaniously send intents,
+fixed tile effects where they can now be permanent, add time for construction and demolishing of buildings
+making those actions no longer instant (also implemented UI progress bar for these actions)
+---------------------------

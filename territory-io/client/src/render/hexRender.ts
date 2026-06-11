@@ -5,7 +5,7 @@ import { camera } from "./camera";
 import { getStripePattern } from "./patterns";
 import { FILL_ALPHA } from "../constants";
 import { darken } from "./playerColors";
-import { DEFENSE_HEAT_DECAY_MS } from "../constants";
+import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants";
 import { tileTextures } from "./assetManager";
 
 /** 
@@ -544,4 +544,70 @@ export function drawCaptureHex(
   }
 
   ctx.stroke();
+}
+
+export function drawBuildingProgressBar(
+  ctx: CanvasRenderingContext2D,
+  q: number,
+  r: number,
+  size: number,
+  tile: TileState,
+) {
+  // If no action is running, there's nothing to render
+  if (!tile.buildingAction) return;
+
+  const action = tile.buildingAction;
+  const now = Date.now();
+  const totalDurationMs = (action.actionType === "CONSTRUCTING"
+    ? BUILDING_CONSTRUCTION_TIME[action.building]
+    : BUILDING_DEMOLISH_TIME[action.building]) * 1000;
+
+  // Calculate remaining time and clamp progress between 0.0 and 1.0
+  const timeLeft = action.readyAt - now;
+  const progress = Math.max(0, Math.min(1, 1 - (timeLeft / totalDurationMs)));
+
+  // 1. Calculate Hex Screen Positions
+  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
+  // Using the same layout scale matching your drawBuildingIcon function
+  const worldY = size * (3.5 / 2.333 * r);
+
+  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
+  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
+
+  // Dimensions scaled dynamically by map zoom layers
+  const s = size * camera.zoom * 0.35;
+  const barWidth = s * 1.5;
+  const barHeight = Math.max(4, 5 * camera.zoom);
+  
+  // Position the bar right underneath the building foundation pad
+  const barX = x - barWidth / 2;
+  const barY = y + s * 1.0; 
+
+  ctx.save();
+
+  // 2. Draw Background Container Track (Dark Capsule)
+  ctx.fillStyle = "rgba(10, 12, 15, 0.85)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+  ctx.lineWidth = 1;
+  
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barWidth, barHeight, barHeight / 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. Draw Inner Fill Progress
+  if (progress > 0) {
+    // Dynamic Fill Theme Selection
+    ctx.fillStyle = action.actionType === "CONSTRUCTING" 
+      ? "#34d399"  // Bright Emerald Green
+      : "#f87171"; // Industrial Coral Red
+
+    const fillWidth = barWidth * progress;
+
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, fillWidth, barHeight, barHeight / 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
