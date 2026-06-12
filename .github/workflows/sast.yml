@@ -18,13 +18,15 @@ jobs:
         uses: semgrep/semgrep-action@v1
         with:
           config: p/typescript p/default
+          src: ./territory-io
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }} 
-          
+
       - name: Node.js setup
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: npm library check (SCA)
+        working-directory: ./territory-io
         run: npm audit --audit-level=high
