@@ -1,4 +1,3 @@
-
 {
   "name": "territory-io-client",
   "private": true,
@@ -10,6 +9,6 @@
   },
   "devDependencies": {
     "typescript": "^5.5.4",
-    "vite": "^5.4.0"
+    "vite": "^8.0.16"
   }
 }
