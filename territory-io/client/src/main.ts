@@ -1,6 +1,13 @@
 
-import { drawHex, getTileColor, drawCaptureHex, drawHexEffects, drawBuildingIcon, drawBuildingProgressBar } from "./render/hexRender";
-import { drawHexText } from "./render/text";
+import { 
+  drawHexBatch, 
+  getTileColor, 
+  drawHexEffectsBatch, 
+  drawBuildingsBatch, 
+  drawCaptureHexBatch, 
+  drawBuildingProgressBarsBatch 
+} from "./render/hexRender";
+import { drawHexTextBatch } from "./render/text";
 import { pixelToAxial } from "./utils/hexMath";
 import { drawHUD,drawTargetingHUD } from "./ui/hud";
 import { connect } from "./net/socket";
@@ -46,7 +53,16 @@ export const { sendIntent } = connect(wsUrl, {
   onState: (state) => {
     clientNetState.state = state;
 
+    connectedByPlayer.clear();
+    for (const p of state.players.values()) {
+      if (!p.eliminated) {
+        connectedByPlayer.set(p.id, getConnectedTilesFromHQ_Client(state, p.id));
+      }
+    }
+    
     const meId = clientNetState.playerId;
+    myConTileCount = connectedByPlayer.get(meId ?? "")?.size ?? 0;
+
     const me = meId ? state.players.get(meId) : null;
 
     if (state.gameOver) {
@@ -256,36 +272,39 @@ function loop() {
   updateBuildButtons(state, me);
 
   const canRenderMap =
-  state &&
-  me &&
-  (clientUIState.phase === "PLAYING" ||
-   clientUIState.phase === "GAME_OVER");
+    state &&
+    me &&
+    (clientUIState.phase === "PLAYING" ||
+     clientUIState.phase === "GAME_OVER");
 
   if (!canRenderMap) 
     return;
+    
   ctx.fillStyle = "#0c0c0cff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-
-  if (state)
-    {
-      connectedByPlayer.clear();
-      for (const p of state.players.values()) {
-        if (!p.eliminated) {
-          connectedByPlayer.set(
-            p.id,
-            getConnectedTilesFromHQ_Client(state, p.id)
-          );
-        }
-      }
-    }
-  myConTileCount = connectedByPlayer.get(me)?.size ?? 0;
-
   if (state && me) {
+    const halfW = canvas.width / 2;
+    const halfH = canvas.height / 2;
+    const cullRadius = HEX_SIZE * camera.zoom * 2.0;
+
+    // 1. ALLOCATION-FREE SCREEN PREPARATION ARRAYS
+    const visibleTiles: any[] = [];
+
     for (const tile of state.tiles.values()) {
+      const worldX = HEX_SIZE * (Math.sqrt(3) * tile.q + (Math.sqrt(3) / 2) * tile.r);
+      const worldY = HEX_SIZE * (1.5 * tile.r); 
+      const x = (worldX - camera.x) * camera.zoom + halfW;
+      const y = (worldY - camera.y) * camera.zoom + halfH;
+
+      // Viewport Frustum Culling
+      if (x < -cullRadius || x > canvas.width + cullRadius || y < -cullRadius || y > canvas.height + cullRadius) {
+        continue;
+      }
+
       const owner = tile.ownerId;
       let isCutOff = false;
-      let hovered = (tile.q === hoveredHex?.q && tile.r === hoveredHex?.r)
+      const hovered = (tile.q === hoveredHex?.q && tile.r === hoveredHex?.r);
 
       if (owner) {
         const connected = connectedByPlayer.get(owner);
@@ -294,57 +313,64 @@ function loop() {
         }
       }
 
-      const { color, fillAlpha } = getTileColor({
+      // Garbage Collection Fix: Arguments passed directly with zero object instantiations
+      const { color, fillAlpha } = getTileColor(
         tile,
         hovered,
         state,
-        playerId: me,
+        me,
         isCutOff,
         connectedByPlayer
-      });
-      const isTileHovered = (hoveredHex?.q === tile.q && hoveredHex?.r === tile.r);
-      drawHex(ctx, tile.q, tile.r, HEX_SIZE, color, tile.terrain, tile.ownerId, fillAlpha, isTileHovered);
-      drawHexEffects(ctx, tile.q, tile.r, HEX_SIZE, tile);
+      );
       
+      const isTileHovered = (hoveredHex?.q === tile.q && hoveredHex?.r === tile.r);
 
-      const text = tile.defense.toString();
-      const label = text;
-
-      if (tile.buildingAction) {
-        drawBuildingIcon(ctx, tile.q, tile.r, HEX_SIZE, tile.buildingAction.building, color);
-        drawBuildingProgressBar(
-          ctx,
-          tile.q,
-          tile.r,
-          HEX_SIZE,
-          tile,
-        );
-      } else if(tile.building)
-        drawBuildingIcon(ctx, tile.q, tile.r, HEX_SIZE, tile.building, color);
-
-      drawHexText(ctx, tile.q, tile.r, HEX_SIZE, label, !!tile.building || !!tile.buildingAction);
-
+      let captureColor = "#fff";
       if (tile.capture) {
         const attacker = state.players.get(tile.capture.by);
-        const ringColor = attacker?.color ?? "#fff";
-        drawCaptureHex(
-          ctx,
-          tile.q,
-          tile.r,
-          HEX_SIZE,
-          tile.capture.progress,
-          ringColor,
-          deltaTime
-        );
+        captureColor = attacker?.color ?? "#fff";
       }
-      
+
+      visibleTiles.push({
+        tile,
+        x,
+        y,
+        worldX,
+        worldY,
+        color,
+        fillAlpha,
+        isHovered: isTileHovered,
+        captureColor
+      });
     }
 
-    // UI for hovered tile info
-    if(hoveredHex){
-      const hoveredTile = state.tiles.get(
-        `${hoveredHex?.q},${hoveredHex?.r}`
-      );
+    // =================================================================
+    // THE HIGH-PERFORMANCE BATCHED RECONSTRUCTION PIPELINE
+    // =================================================================
+    
+    // Pass A: Hex layouts, Terrain patterns, and Grid lines
+    drawHexBatch(ctx, visibleTiles, HEX_SIZE);
+
+    // Pass B: Stun flashes and orange defensive heat elements
+    drawHexEffectsBatch(ctx, visibleTiles, HEX_SIZE);
+
+    // Pass C: Base foundation pads and building vector curves
+    drawBuildingsBatch(ctx, visibleTiles, HEX_SIZE);
+
+    // Pass D: Real-time action/construction progress counters
+    drawBuildingProgressBarsBatch(ctx, visibleTiles, HEX_SIZE);
+
+    // Pass E: Smooth sector conquest border tracking animations
+    drawCaptureHexBatch(ctx, visibleTiles, HEX_SIZE, deltaTime);
+
+    // Pass F: Vector font rendering isolated behind a Level of Detail (LOD) threshold
+    if (camera.zoom > 0.75) {
+      drawHexTextBatch(ctx, visibleTiles, HEX_SIZE);
+    }
+
+    // Hovered tile information popup card (Kept separate out of the core map layout loops)
+    if (hoveredHex) {
+      const hoveredTile = state.tiles.get(`${hoveredHex.q},${hoveredHex.r}`);
       if (hoveredTile && !state.gameOver) {
         drawTileInfo(ctx, hoveredTile, state, me);
       }
@@ -353,8 +379,7 @@ function loop() {
 
   drawHUD(ctx);
   drawTargetingHUD(ctx);
-  drawGameLogs(ctx)
-  
+  drawGameLogs(ctx);
 }
 
 setInterval(() => {

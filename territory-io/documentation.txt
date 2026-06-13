@@ -33,3 +33,5 @@ building without functionality, added info about tile and player effects to tile
 fixed tile effects where they can now be permanent, add time for construction and demolishing of buildings
 making those actions no longer instant (also implemented UI progress bar for these actions)
 ---------------------------
+12.6.2026. - greatly optimized main render loop in client to handle visualization of tiles in batches and greatly optimized
+tile text processing

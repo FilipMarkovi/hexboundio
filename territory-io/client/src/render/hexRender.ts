@@ -1,4 +1,3 @@
-
 import type { TileState, PlayerId, BuildingType } from "../../../shared";
 import { canCaptureClient } from "../utils/canCapture";
 import { camera } from "./camera";
@@ -8,227 +7,475 @@ import { darken } from "./playerColors";
 import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants";
 import { tileTextures } from "./assetManager";
 
-/** 
-export function drawCaptureHex(
+/**
+ * BATCH PASS 1: Renders background textures, team color overlays, and 
+ * combines all grid line boundaries into a single hardware stroke pass.
+ */
+export function drawHexBatch(
   ctx: CanvasRenderingContext2D,
-  q: number,
-  r: number,
-  size: number,
-  progress: number,
-  color: string
+  items: Array<{
+    tile: TileState;
+    x: number;
+    y: number;
+    worldX: number;
+    worldY: number;
+    color: string;
+    fillAlpha: number;
+    isHovered: boolean;
+  }>,
+  size: number
 ) {
-  // 1. Calculate Center Position (Matches your hex drawing)
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const worldY = size * (3 / 2 * r);
-  const centerX = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const centerY = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-
-  // 2. Shrink it slightly so it stays "inside" the edge
-  const innerSize = size * camera.zoom * 0.9; 
-  
-  // 3. Define the 6 corners of a hexagon (starting from top)
-  const corners: {x: number, y: number}[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i - Math.PI / 2; // -90 degrees is top
-    corners.push({
-      x: centerX + innerSize * Math.cos(angle),
-      y: centerY + innerSize * Math.sin(angle)
-    });
-  }
-  // Add the first corner at the end to close the loop for calculations
-  corners.push(corners[0]);
-
-  // 4. Drawing Setup
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, 4 * camera.zoom);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(corners[0].x, corners[0].y);
-
-  // 5. Calculate how many sides to draw
-  // progress * 6 gives us the current "side index" (e.g., 0.5 * 6 = 3 sides)
-  const totalSides = 6;
-  const currentProgress = Math.min(progress, 1) * totalSides;
-
-  for (let i = 0; i < totalSides; i++) {
-    const sideProgress = Math.max(0, Math.min(1, currentProgress - i));
-    
-    if (sideProgress <= 0) break;
-
-    const start = corners[i];
-    const end = corners[i + 1];
-
-    // Interpolate between corners if the side is only partially finished
-    const targetX = start.x + (end.x - start.x) * sideProgress;
-    const targetY = start.y + (end.y - start.y) * sideProgress;
-
-    ctx.lineTo(targetX, targetY);
-  }
-
-  ctx.stroke();
-}*/
-
-export function drawHex(
-  ctx: CanvasRenderingContext2D,
-  q: number,
-  r: number,
-  size: number,
-  baseColor: string,
-  tileTerrain: string,
-  owner: string | null,
-  fillAlpha = FILL_ALPHA,
-  isHovered = false
-): Array<[number, number]> {
-
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const worldY = size * (3 / 2 * r);
   const renderSize = size * camera.zoom;
 
-  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-    
-  const pts: Array<[number, number]> = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i + Math.PI / 6;
-    pts.push([
-      x + renderSize * Math.cos(angle),
-      y + renderSize * Math.sin(angle)
-    ]);
+  // 1. Draw Terrain Backgrounds and Ownership Fills
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y, worldX, worldY, tile, color, fillAlpha, isHovered } = item;
+    const owner = tile.ownerId;
+
+    ctx.beginPath();
+    for (let j = 0; j < 6; j++) {
+      const angle = (Math.PI / 3) * j + Math.PI / 6;
+      ctx.lineTo(
+        x + renderSize * Math.cos(angle),
+        y + renderSize * Math.sin(angle)
+      );
+    }
+    ctx.closePath();
+
+    if (!owner && !isHovered) {
+      let activePattern: CanvasPattern | null = null;
+      const tileTerrain = tile.terrain;
+      if (tileTerrain === "GRASS") activePattern = tileTextures.grass;
+      if (tileTerrain === "DESERT") activePattern = tileTextures.desert;
+      if (tileTerrain === "MOUNTAIN") activePattern = tileTextures.mountain;
+      if (tileTerrain === "WATER") activePattern = tileTextures.water;
+
+      if (activePattern) {
+        ctx.save();
+        ctx.translate(-camera.x * camera.zoom + ctx.canvas.width / 2, -camera.y * camera.zoom + ctx.canvas.height / 2);
+        
+        const patternDetailScale = 0.5; 
+        ctx.scale(camera.zoom * patternDetailScale, camera.zoom * patternDetailScale);
+        
+        ctx.beginPath();
+        for (let j = 0; j < 6; j++) {
+          const angle = (Math.PI / 3) * j + Math.PI / 6;
+          ctx.lineTo(
+            (worldX + size * Math.cos(angle)) / patternDetailScale, 
+            (worldY + size * Math.sin(angle)) / patternDetailScale
+          );
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = activePattern;
+        ctx.fill();
+        ctx.restore(); 
+      } else {
+        if (tileTerrain === "DESERT") ctx.fillStyle = "#e6b575";
+        else if (tileTerrain === "MOUNTAIN") ctx.fillStyle = "#525252";
+        else if (tileTerrain === "WATER") ctx.fillStyle = "#1561b9";
+        else ctx.fillStyle = "#58853e";
+        ctx.fill();
+      }
+    }
+
+    // Layer 2: TEAM COLOR / HOVER HIGHLIGHT OVERLAY
+    ctx.save();
+    ctx.globalAlpha = fillAlpha;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
   }
 
-  // 3. TRACE OUTLINE PATH
+  // 2. High Performance Unified Grid Lines Pass
+  ctx.lineWidth = Math.min(2, 2 / camera.zoom);
+  ctx.strokeStyle = "rgba(0,0,0,0.5)";
   ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.closePath();
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y } = item;
+    for (let j = 0; j < 6; j++) {
+      const angle = (Math.PI / 3) * j + Math.PI / 6;
+      const px = x + renderSize * Math.cos(angle);
+      const py = y + renderSize * Math.sin(angle);
+      if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+  ctx.stroke();
+}
 
-  if (!owner && !isHovered) {
-    // 4. LAYER 1: DRAW BACKGROUND TEXTURES (Fixed Matrix Logic)
-    let activePattern: CanvasPattern | null = null;
-    // Make sure your extensions match your exact files! (.jpg for grass)
-    if (tileTerrain === "GRASS" || tileTerrain === "G") activePattern = tileTextures.grass;
-    if (tileTerrain === "DESERT" || tileTerrain === "D") activePattern = tileTextures.desert;
-    if (tileTerrain === "MOUNTAIN" || tileTerrain === "M") activePattern = tileTextures.mountain;
-    if (tileTerrain === "WATER" || tileTerrain === "W") activePattern = tileTextures.water;
+/**
+ * BATCH PASS 2: Renders dynamic grid shield flashes and local defense heat tracking layers.
+ */
+export function drawHexEffectsBatch(
+  ctx: CanvasRenderingContext2D,
+  items: any[],
+  size: number
+) {
+  const now = Date.now();
+  const renderSize = size * camera.zoom;
 
-    if (activePattern) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y, tile } = item;
+    const timeSinceLast = now - (tile.lastDefendedAt || 0);
+    if (timeSinceLast > DEFENSE_HEAT_DECAY_MS) continue;
+
+    // EFFECT 1: ATTACK COOLDOWN (The 1-second "Stun")
+    if (timeSinceLast < 1000) {
+      const p = 1 - (timeSinceLast / 1000);
       ctx.save();
-      // 1. Shift canvas matrix to camera view space
-      ctx.translate(-camera.x * camera.zoom + ctx.canvas.width / 2, -camera.y * camera.zoom + ctx.canvas.height / 2);
-      
-      // 2. Adjust pattern density! Lower numbers (like 0.25) shrink the texture detail down
-      const patternDetailScale = 0.5; 
-      ctx.scale(camera.zoom * patternDetailScale, camera.zoom * patternDetailScale);
-      
-      // 3. Since the context matrix is heavily scaled down, scale up the path points to compensate
       ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i + Math.PI / 6;
-        // Divide by patternDetailScale to ensure the boundary matches the true hex edge
-        ctx.lineTo(
-          (worldX + size * Math.cos(angle)) / patternDetailScale, 
-          (worldY + size * Math.sin(angle)) / patternDetailScale
-        );
+      for (let j = 0; j < 6; j++) {
+        const angle = (Math.PI / 3) * j + Math.PI / 6;
+        const px = x + renderSize * Math.cos(angle);
+        const py = y + renderSize * Math.sin(angle);
+        if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.closePath();
-
-      ctx.fillStyle = activePattern;
-      ctx.fill();
-      ctx.restore(); 
-    } else {
-      // Solid color fallbacks matching the brightened variants below
-      ctx.save();
-      if (tileTerrain === "DESERT" || tileTerrain === "D") ctx.fillStyle = "#e6b575";
-      else if (tileTerrain === "MOUNTAIN" || tileTerrain === "M") ctx.fillStyle = "#525252"; // Updated color fallback
-      else if (tileTerrain === "WATER" || tileTerrain === "W") ctx.fillStyle = "#1561b9";
-      else ctx.fillStyle = "#58853e";
+      
+      ctx.strokeStyle = `rgba(255, 255, 255, ${p * 0.8})`;
+      ctx.lineWidth = 4 * camera.zoom;
+      ctx.stroke();
+      
+      ctx.fillStyle = `rgba(255, 255, 255, ${p * 0.2})`;
       ctx.fill();
       ctx.restore();
     }
+
+    // EFFECT 2: DEFENSE HEAT (The 10-second "Heat")
+    if (timeSinceLast < DEFENSE_HEAT_DECAY_MS && tile.defenseHeat > 0) {
+      const p = 1 - (timeSinceLast / DEFENSE_HEAT_DECAY_MS);
+      const radius = renderSize * 0.76;
+      
+      ctx.save();
+      const heatColor = tile.defenseHeat >= 3 ? "#ec2d2d" : "#ec9150d7";
+      
+      ctx.setLineDash([4 * camera.zoom, 4 * camera.zoom]);
+      ctx.strokeStyle = heatColor;
+      ctx.globalAlpha = p * 0.6;
+      ctx.lineWidth = (1 + tile.defenseHeat) * camera.zoom;
+      
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+/**
+ * BATCH PASS 3: Static building geometries.
+ * Sets the drawing styles once to remove redundant pipeline state switches.
+ */
+export function drawBuildingsBatch(
+  ctx: CanvasRenderingContext2D,
+  items: any[],
+  size: number
+) {
+  const s = size * camera.zoom * 0.35;
+
+  // 1. Draw structural ground shadows together
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y, tile } = item;
+    if (!tile.building && !tile.buildingAction) continue;
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + s * 0.6, s * 1.2, s * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // 5. LAYER 2: TEAM COLOR / HOVER HIGHLIGHT OVERLAY
+  // 2. Lock uniform layout styles once for all building vector loops
   ctx.save();
-  ctx.globalAlpha = fillAlpha;
-  ctx.fillStyle = baseColor;
-  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, 2 * camera.zoom);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#ffffffb2"; 
+  ctx.fillStyle = "rgba(20, 24, 28, 0.9)"; 
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y, tile } = item;
+
+    let type: BuildingType | "HQ" | null = null;
+    if (tile.buildingAction) {
+      type = tile.buildingAction.building;
+    } else if (tile.building) {
+      type = tile.building;
+    }
+    if (!type) continue;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+
+    switch (type) {
+      case "HOUSE":
+        ctx.moveTo(-s * 0.8, s * 0.8); ctx.lineTo(s * 0.8, s * 0.8);
+        ctx.lineTo(s * 0.8, -s * 0.2); ctx.lineTo(0, -s * 0.8); 
+        ctx.lineTo(-s * 0.8, -s * 0.2); ctx.closePath();
+        ctx.moveTo(-s * 0.25, s * 0.8); ctx.lineTo(-s * 0.25, s * 0.2);
+        ctx.lineTo(s * 0.25, s * 0.2); ctx.lineTo(s * 0.25, s * 0.8);
+        break;
+
+      case "BARRACKS":
+        ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(s * 0.7, s * 0.7);
+        ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.3, -s * 0.7);
+        ctx.lineTo(-s * 0.7, -s * 0.3);
+        ctx.moveTo(s * 0.4, s * 0.4); ctx.lineTo(s * 0.6, s * 0.2);
+        ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.7, s * 0.7);
+        ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(s * 0.3, -s * 0.7);
+        ctx.lineTo(s * 0.7, -s * 0.3);
+        ctx.moveTo(-s * 0.4, s * 0.4); ctx.lineTo(-s * 0.6, s * 0.2);
+        break;
+
+      case "FORT":
+        ctx.moveTo(-s * 0.9, s * 0.9); ctx.lineTo(s * 0.9, s * 0.9);
+        ctx.lineTo(s * 0.9, -s * 0.5);
+        ctx.lineTo(s * 0.5, -s * 0.5); ctx.lineTo(s * 0.5, -s * 0.2);
+        ctx.lineTo(s * 0.2, -s * 0.2); ctx.lineTo(s * 0.2, -s * 0.5);
+        ctx.lineTo(-s * 0.2, -s * 0.5); ctx.lineTo(-s * 0.2, -s * 0.2);
+        ctx.lineTo(-s * 0.5, -s * 0.2); ctx.lineTo(-s * 0.5, -s * 0.5);
+        ctx.lineTo(-s * 0.9, -s * 0.5); ctx.closePath();
+        ctx.moveTo(-s * 0.3, s * 0.9); ctx.lineTo(-s * 0.3, s * 0.4);
+        ctx.arc(0, s * 0.4, s * 0.3, Math.PI, 0); 
+        ctx.lineTo(s * 0.3, s * 0.9);
+        break;
+      
+      case "LABORATORY":
+        ctx.moveTo(-s * 0.9, s * 0.8);  
+        ctx.lineTo(s * 0.9, s * 0.8);   
+        ctx.lineTo(s * 0.25, -s * 0.1);
+        ctx.lineTo(s * 0.25, -s * 0.7); 
+        ctx.lineTo(s * 0.4, -s * 0.7);  
+        ctx.lineTo(s * 0.4, -s * 0.85);
+        ctx.lineTo(-s * 0.4, -s * 0.85);
+        ctx.lineTo(-s * 0.4, -s * 0.7); 
+        ctx.lineTo(-s * 0.25, -s * 0.7);
+        ctx.lineTo(-s * 0.25, -s * 0.1);
+        ctx.closePath();
+        break;
+
+      case "SIEGE_OUTPOST":
+        ctx.beginPath();
+        ctx.moveTo(0, s * 0.45); 
+        ctx.quadraticCurveTo(-s * 0.5, s * 0.45, -s * 0.85, s * 0.85);
+        ctx.lineTo(-s * 0.65, s * 0.85);
+        ctx.quadraticCurveTo(-s * 0.3, s * 0.5, 0, s * 0.45);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.65, s * 0.3);   
+        ctx.lineTo(-s * 0.48, s * 0.0);   
+        ctx.lineTo(s * 0.75, -s * 0.5);   
+        ctx.lineTo(s * 0.7, -s * 0.58);
+        ctx.lineTo(s * 0.83, -s * 0.64);
+        ctx.lineTo(s * 0.96, -s * 0.38);
+        ctx.lineTo(s * 0.83, -s * 0.32);
+        ctx.lineTo(s * 0.58, -s * 0.2);   
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(-s * 0.6, s * 0.17, s * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, s * 0.45, s * 0.45, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, s * 0.45, s * 0.11, 0, Math.PI * 2); 
+        ctx.stroke();
+
+        ctx.moveTo(-s * 0.45, s * 0.45); ctx.lineTo(s * 0.45, s * 0.45); 
+        ctx.moveTo(0, s * 0.0);          ctx.lineTo(0, s * 0.9);          
+        ctx.stroke();
+
+        ctx.beginPath();
+        break;
+        
+      case "HQ":
+        ctx.moveTo(-s * 0.7, s * 0.8); ctx.lineTo(s * 0.7, s * 0.8); 
+        ctx.lineTo(s * 0.9, -s * 0.5); 
+        ctx.lineTo(s * 0.4, -s * 0.1); 
+        ctx.lineTo(0, -s * 0.9);       
+        ctx.lineTo(-s * 0.4, -s * 0.1); 
+        ctx.lineTo(-s * 0.9, -s * 0.5); 
+        ctx.closePath();
+        ctx.moveTo(0, s * 0.5); ctx.arc(0, s * 0.5, s * 0.1, 0, Math.PI * 2);
+        ctx.moveTo(-s * 0.4, s * 0.5); ctx.arc(-s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
+        ctx.moveTo(s * 0.4, s * 0.5); ctx.arc(s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
+        break;
+    }
+
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
-
-  // 6. LAYER 3: GRID OUTLINES
-  ctx.lineWidth = Math.min(2, 2 / camera.zoom);
-  ctx.strokeStyle = "rgba(0,0,0,0.5)";
-  ctx.stroke();
-
-  return pts;
 }
 
-export function drawHexStripes(
+/**
+ * BATCH PASS 4: Linear capture progress tracking rings.
+ */
+const visualProgressMap = new Map<string, number>();
+export function drawCaptureHexBatch(
   ctx: CanvasRenderingContext2D,
-  pts: Array<[number, number]>
+  items: any[],
+  size: number,
+  deltaTime: number
 ) {
-  ctx.save();
-  ctx.clip(); // uses current path
-  ctx.fillStyle = getStripePattern(ctx)!;
-  ctx.fillRect(
-    pts[0][0] - 100,
-    pts[0][1] - 100,
-    200,
-    200
-  );
-  ctx.restore();
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { tile, x, y, captureColor } = item;
+    if (!tile.capture) continue;
+
+    const serverProgress = tile.capture.progress;
+    const tileKey = `${tile.q},${tile.r}`;
+    
+    let visualProgress = visualProgressMap.get(tileKey) ?? 0;
+    if (serverProgress === 0 || visualProgress > serverProgress) visualProgress = 0;
+
+    const lerpSpeed = 10 * deltaTime; 
+    visualProgress += (serverProgress - visualProgress) * lerpSpeed;
+    visualProgressMap.set(tileKey, visualProgress);
+
+    const innerSize = size * camera.zoom * 0.9; 
+    
+    const corners: {x: number, y: number}[] = [];
+    for (let j = 0; j < 6; j++) {
+      const angle = (Math.PI / 3) * j - Math.PI / 2;
+      corners.push({
+        x: x + innerSize * Math.cos(angle),
+        y: y + innerSize * Math.sin(angle)
+      });
+    }
+    corners.push(corners[0]);
+
+    ctx.save();
+    ctx.strokeStyle = captureColor;
+    ctx.lineWidth = Math.max(2, 4 * camera.zoom);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+
+    const totalSides = 6;
+    const currentProgress = Math.min(visualProgress, 1) * totalSides;
+
+    for (let j = 0; j < totalSides; j++) {
+      const sideProgress = Math.max(0, Math.min(1, currentProgress - j));
+      if (sideProgress <= 0) break;
+
+      const start = corners[j];
+      const end = corners[j + 1];
+      ctx.lineTo(
+        start.x + (end.x - start.x) * sideProgress,
+        start.y + (end.y - start.y) * sideProgress
+      );
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
-export function getTileColor(args: {
-  tile: TileState;
-  hovered: boolean;
-  state: any;
-  playerId: PlayerId;
-  isCutOff: boolean;
-  connectedByPlayer: Map<PlayerId, Set<string>>;
-}) {
-  const { tile, hovered, state, playerId, isCutOff, connectedByPlayer } = args;
+/**
+ * BATCH PASS 5: Industrial construction/demolition progress gauges.
+ */
+export function drawBuildingProgressBarsBatch(
+  ctx: CanvasRenderingContext2D,
+  items: any[],
+  size: number
+) {
+  const now = Date.now();
+  const s = size * camera.zoom * 0.35;
+  const barWidth = s * 1.5;
+  const barHeight = Math.max(4, 5 * camera.zoom);
+  
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { x, y, tile } = item;
+    if (!tile.buildingAction) continue;
 
+    const action = tile.buildingAction;
+    const totalDurationMs = (action.actionType === "CONSTRUCTING"
+      ? BUILDING_CONSTRUCTION_TIME[action.building as BuildingType]
+      : BUILDING_DEMOLISH_TIME[action.building as BuildingType]) * 1000;
+
+    const timeLeft = action.readyAt - now;
+    const progress = Math.max(0, Math.min(1, 1 - (timeLeft / totalDurationMs)));
+
+    const barX = x - barWidth / 2;
+    const barY = y + s * 1.0; 
+
+    ctx.save();
+    ctx.fillStyle = "rgba(10, 12, 15, 0.85)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1;
+    
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barWidth, barHeight, barHeight / 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (progress > 0) {
+      ctx.fillStyle = action.actionType === "CONSTRUCTING" ? "#34d399" : "#f87171";
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barWidth * progress, barHeight, barHeight / 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+/**
+ * OPTIMIZED: Uses flat positional parameters to eliminate anonymous 
+ * config wrapper object instantiations from your core map sweep loop.
+ */
+export function getTileColor(
+  tile: TileState,
+  hovered: boolean,
+  state: any,
+  playerId: PlayerId,
+  isCutOff: boolean,
+  connectedByPlayer: Map<PlayerId, Set<string>>
+) {
   let color = "#444";
-
-  // ownership
-  const owner =
-  tile.ownerId ? state.players.get(tile.ownerId) : null;
+  const owner = tile.ownerId ? state.players.get(tile.ownerId) : null;
 
   if (!owner) {
-    color = "#33333377";;
+    color = "#33333377";
   } else {
     color = owner.color;
   }
 
-  // defense darkening
   if (tile.defense > 1) {
-    if (owner)
-      color = darken(owner.color, 0.6);
-    else
-      color = "#202020ff";
+    if (owner) color = darken(owner.color, 0.6);
+    else color = "#202020ff";
   }
 
-  // cut-off visual (do NOT change hue)
   let fillAlpha = FILL_ALPHA;
   if (isCutOff) {
-    fillAlpha = 0.18; // faded
+    fillAlpha = 0.18;
   }
 
   if (tile.terrain === "BEDROCK") {
-    color = "#111";     // very dark
+    color = "#111"; 
     fillAlpha = 1;
   }
 
-  // hover overrides everything
-  if (args.hovered) {
-    const ok = canCaptureClient(
-      state,
-      playerId,
-      tile.q,
-      tile.r,
-      connectedByPlayer
-    );
-
+  if (hovered) {
+    const ok = canCaptureClient(state, playerId, tile.q, tile.r, connectedByPlayer);
     color = ok ? "#6b7cff" : "rgba(216, 121, 121, 1)";
     fillAlpha = 0.45;
   }
@@ -236,378 +483,10 @@ export function getTileColor(args: {
   return { color, fillAlpha };
 }
 
-export function drawHexEffects(
-  ctx: CanvasRenderingContext2D,
-  q: number,
-  r: number,
-  size: number,
-  tile: TileState
-) {
-  const now = Date.now();
-  const timeSinceLast = now - (tile.lastDefendedAt || 0);
-  if(timeSinceLast > DEFENSE_HEAT_DECAY_MS) return 
-
-  // 1. Calculate World/Screen position
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const worldY = size * (3 / 2 * r);
-  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-  const renderSize = size * camera.zoom;
-
-  // === EFFECT 1: ATTACK COOLDOWN (The 1-second "Stun") ===
-  if (timeSinceLast < 1000) {
-    const p = 1 - (timeSinceLast / 1000); // 1.0 down to 0.0
-    ctx.save();
-    ctx.beginPath();
-    // Draw hex shape for the highlight
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i + Math.PI / 6;
-      const px = x + renderSize * Math.cos(angle);
-      const py = y + renderSize * Math.sin(angle);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    
-    // Bright white flash that fades out
-    ctx.strokeStyle = `rgba(255, 255, 255, ${p * 0.8})`;
-    ctx.lineWidth = 4 * camera.zoom;
-    ctx.stroke();
-    
-    // Subtle inner "shield" fill
-    ctx.fillStyle = `rgba(255, 255, 255, ${p * 0.2})`;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // === EFFECT 2: DEFENSE HEAT (The 10-second "Heat") ===
-  if (timeSinceLast < DEFENSE_HEAT_DECAY_MS && tile.defenseHeat > 0) {
-    const p = 1 - (timeSinceLast / DEFENSE_HEAT_DECAY_MS); // 1.0 down to 0.0
-    const radius = renderSize * 0.76;
-    
-    ctx.save();
-    // Use an orange-red glow based on heat intensity
-    const heatColor = tile.defenseHeat >= 3 ? "#ec2d2d" : "#ec9150d7";
-    
-    ctx.setLineDash([4 * camera.zoom, 4 * camera.zoom]); // Dashed "unstable" look
-    ctx.strokeStyle = heatColor;
-    ctx.globalAlpha = p * 0.6; // Fades over 10s
-    ctx.lineWidth = (1 + tile.defenseHeat) * camera.zoom; // Gets thicker with more heat
-    
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-export function drawBuildingIcon(
-  ctx: CanvasRenderingContext2D, 
-  q: number, 
-  r: number, 
-  size: number, 
-  type: BuildingType | "HQ",
-  strokeColor: string 
-) {
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const worldY = size * (3.5 / 2.333 * r);
-
-  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-
-  const s = size * camera.zoom * 0.35; 
-  
+export function drawHexStripes(ctx: CanvasRenderingContext2D, pts: Array<[number, number]>) {
   ctx.save();
-  ctx.translate(x, y);
-  
-  // 1. DRAW FOUNDATION PAD (Creates contrast against the tile)
-  ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; // Dark transparent shadow
-  ctx.beginPath();
-  // An ellipse that sits at the "bottom" of the building
-  ctx.ellipse(0, s * 0.6, s * 1.2, s * 0.6, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 2. SETUP BUILDING STYLES
-  ctx.lineWidth = Math.max(1.5, 2 * camera.zoom);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  
-  // High contrast: Bright white outline, very dark solid fill
-  ctx.strokeStyle = "#ffffffb2"; 
-  ctx.fillStyle = "rgba(20, 24, 28, 0.9)"; 
-
-  ctx.beginPath();
-  switch (type) {
-    case "HOUSE":
-      // Pitched roof house with a door and a round window
-      // Outer shell
-      ctx.moveTo(-s * 0.8, s * 0.8); ctx.lineTo(s * 0.8, s * 0.8);
-      ctx.lineTo(s * 0.8, -s * 0.2); ctx.lineTo(0, -s * 0.8); 
-      ctx.lineTo(-s * 0.8, -s * 0.2); ctx.closePath();
-      // Door
-      ctx.moveTo(-s * 0.25, s * 0.8); ctx.lineTo(-s * 0.25, s * 0.2);
-      ctx.lineTo(s * 0.25, s * 0.2); ctx.lineTo(s * 0.25, s * 0.8);
-      break;
-
-    case "BARRACKS":
-      // Crossed Swords (Universally recognizable for military)
-      // Sword 1 (Top Left to Bottom Right)
-      ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(s * 0.7, s * 0.7); // Blade
-      ctx.moveTo(-s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.3, -s * 0.7); // Tip detail
-      ctx.lineTo(-s * 0.7, -s * 0.3);
-      ctx.moveTo(s * 0.4, s * 0.4); ctx.lineTo(s * 0.6, s * 0.2); // Crossguard
-      // Sword 2 (Top Right to Bottom Left)
-      ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(-s * 0.7, s * 0.7); // Blade
-      ctx.moveTo(s * 0.7, -s * 0.7); ctx.lineTo(s * 0.3, -s * 0.7); // Tip detail
-      ctx.lineTo(s * 0.7, -s * 0.3);
-      ctx.moveTo(-s * 0.4, s * 0.4); ctx.lineTo(-s * 0.6, s * 0.2); // Crossguard
-      break;
-
-    case "FORT":
-      // Heavy Castle with an arched doorway
-      // Main walls
-      ctx.moveTo(-s * 0.9, s * 0.9); ctx.lineTo(s * 0.9, s * 0.9);
-      ctx.lineTo(s * 0.9, -s * 0.5);
-      // Merlons (The teeth on top)
-      ctx.lineTo(s * 0.5, -s * 0.5); ctx.lineTo(s * 0.5, -s * 0.2);
-      ctx.lineTo(s * 0.2, -s * 0.2); ctx.lineTo(s * 0.2, -s * 0.5);
-      ctx.lineTo(-s * 0.2, -s * 0.5); ctx.lineTo(-s * 0.2, -s * 0.2);
-      ctx.lineTo(-s * 0.5, -s * 0.2); ctx.lineTo(-s * 0.5, -s * 0.5);
-      ctx.lineTo(-s * 0.9, -s * 0.5); ctx.closePath();
-      // Arched Portcullis/Doorway
-      ctx.moveTo(-s * 0.3, s * 0.9); ctx.lineTo(-s * 0.3, s * 0.4);
-      ctx.arc(0, s * 0.4, s * 0.3, Math.PI, 0); 
-      ctx.lineTo(s * 0.3, s * 0.9);
-      break;
-    
-    case "LABORATORY":
-      // Outer Flask Hull
-      ctx.moveTo(-s * 0.9, s * 0.8);  
-      ctx.lineTo(s * 0.9, s * 0.8);   
-      ctx.lineTo(s * 0.25, -s * 0.1);
-      ctx.lineTo(s * 0.25, -s * 0.7); 
-      ctx.lineTo(s * 0.4, -s * 0.7);  
-      ctx.lineTo(s * 0.4, -s * 0.85);
-      ctx.lineTo(-s * 0.4, -s * 0.85);
-      ctx.lineTo(-s * 0.4, -s * 0.7); 
-      ctx.lineTo(-s * 0.25, -s * 0.7)
-      ctx.lineTo(-s * 0.25, -s * 0.1)
-      ctx.closePath();
-      break;
-
-      case "SIEGE_OUTPOST":
-            // Scaled-Up, Bold Right-Facing Cannon (No flag, maximized size)
-            
-            // ==========================================
-            // LAYER 1: THE CARRIAGE TRAIL (Swept further left and down)
-            // ==========================================
-            ctx.beginPath();
-            ctx.moveTo(0, s * 0.45); 
-            // Sweeps back further to -s * 0.85 to anchor the larger size
-            ctx.quadraticCurveTo(-s * 0.5, s * 0.45, -s * 0.85, s * 0.85);
-            ctx.lineTo(-s * 0.65, s * 0.85);
-            ctx.quadraticCurveTo(-s * 0.3, s * 0.5, 0, s * 0.45);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // ==========================================
-            // LAYER 2: THE CANNON BARREL (Thicker and longer)
-            // ==========================================
-            ctx.beginPath();
-            ctx.moveTo(-s * 0.65, s * 0.3);   // Breech shifted further left
-            ctx.lineTo(-s * 0.48, s * 0.0);   
-            ctx.lineTo(s * 0.75, -s * 0.5);   // Muzzle extended much further up-right
-            
-            // Enlarged Muzzle Flare Ring
-            ctx.lineTo(s * 0.7, -s * 0.58);
-            ctx.lineTo(s * 0.83, -s * 0.64);
-            ctx.lineTo(s * 0.96, -s * 0.38);
-            ctx.lineTo(s * 0.83, -s * 0.32);
-            
-            ctx.lineTo(s * 0.58, -s * 0.2);   // Bottom barrel line
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // Cascabel (Enlarged breech knob)
-            ctx.beginPath();
-            ctx.arc(-s * 0.6, s * 0.17, s * 0.09, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // ==========================================
-            // LAYER 3: THE WHEEL (Blown up from 0.3s to 0.45s)
-            // ==========================================
-            ctx.beginPath();
-            ctx.arc(0, s * 0.45, s * 0.45, 0, Math.PI * 2); // Massive outer rim
-            ctx.fill();
-            ctx.stroke();
-
-            // Hub & Spoke details scaled to match the massive wheel
-            ctx.beginPath();
-            ctx.arc(0, s * 0.45, s * 0.11, 0, Math.PI * 2); // Bigger center hubcap
-            ctx.stroke();
-
-            // Geometric Cross Spokes extended to the new wheel edges
-            ctx.moveTo(-s * 0.45, s * 0.45); ctx.lineTo(s * 0.45, s * 0.45); // Horizontal
-            ctx.moveTo(0, s * 0.0);          ctx.lineTo(0, s * 0.9);          // Vertical
-            ctx.stroke();
-
-            // CRITICAL: Reset the path layout so the global script doesn't double-draw
-            ctx.beginPath();
-            break;
-            
-      case "HQ":
-      // Majestic Crown
-      ctx.moveTo(-s * 0.7, s * 0.8); ctx.lineTo(s * 0.7, s * 0.8); // Flat base
-      ctx.lineTo(s * 0.9, -s * 0.5); // Right edge up
-      ctx.lineTo(s * 0.4, -s * 0.1); // Inner right dip
-      ctx.lineTo(0, -s * 0.9);       // Center tall spike
-      ctx.lineTo(-s * 0.4, -s * 0.1); // Inner left dip
-      ctx.lineTo(-s * 0.9, -s * 0.5); // Left edge up
-      ctx.closePath();
-      // Add jewels/rivets to the base of the crown
-      ctx.moveTo(0, s * 0.5); ctx.arc(0, s * 0.5, s * 0.1, 0, Math.PI * 2);
-      ctx.moveTo(-s * 0.4, s * 0.5); ctx.arc(-s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
-      ctx.moveTo(s * 0.4, s * 0.5); ctx.arc(s * 0.4, s * 0.5, s * 0.08, 0, Math.PI * 2);
-      break;
-  }
-
-  // 3. RENDER THE BUILDING
-  ctx.fill();   // Fills with the dark color
-  ctx.stroke(); // Draws the white outline
-  
-  ctx.restore();
-}
-
-/** */
-const visualProgressMap = new Map<string, number>();
-export function drawCaptureHex(
-  ctx: CanvasRenderingContext2D,
-  q: number,
-  r: number,
-  size: number,
-  serverProgress: number, // Rename this to clarify it's the "target"
-  color: string,
-  deltaTime: number
-) {
-  const tileKey = `${q},${r}`;
-  
-  // 1. Get the last "smooth" value we drew
-  let visualProgress = visualProgressMap.get(tileKey) ?? 0;
-  if (serverProgress === 0 || visualProgress > serverProgress) visualProgress = 0;
-
-  // 2. The chase
-  const lerpSpeed = 10 * deltaTime; 
-  visualProgress += (serverProgress - visualProgress) * lerpSpeed;
-  
-  // Save the new smooth value for the next frame
-  visualProgressMap.set(tileKey, visualProgress);
-
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  const worldY = size * (3 / 2 * r);
-  const centerX = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const centerY = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-
-  const innerSize = size * camera.zoom * 0.9; 
-  
-  const corners: {x: number, y: number}[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i - Math.PI / 2;
-    corners.push({
-      x: centerX + innerSize * Math.cos(angle),
-      y: centerY + innerSize * Math.sin(angle)
-    });
-  }
-  corners.push(corners[0]);
-
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, 4 * camera.zoom);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(corners[0].x, corners[0].y);
-
-  // USE visualProgress HERE
-  const totalSides = 6;
-  const currentProgress = Math.min(visualProgress, 1) * totalSides;
-
-  for (let i = 0; i < totalSides; i++) {
-    const sideProgress = Math.max(0, Math.min(1, currentProgress - i));
-    if (sideProgress <= 0) break;
-
-    const start = corners[i];
-    const end = corners[i + 1];
-    const targetX = start.x + (end.x - start.x) * sideProgress;
-    const targetY = start.y + (end.y - start.y) * sideProgress;
-
-    ctx.lineTo(targetX, targetY);
-  }
-
-  ctx.stroke();
-}
-
-export function drawBuildingProgressBar(
-  ctx: CanvasRenderingContext2D,
-  q: number,
-  r: number,
-  size: number,
-  tile: TileState,
-) {
-  // If no action is running, there's nothing to render
-  if (!tile.buildingAction) return;
-
-  const action = tile.buildingAction;
-  const now = Date.now();
-  const totalDurationMs = (action.actionType === "CONSTRUCTING"
-    ? BUILDING_CONSTRUCTION_TIME[action.building]
-    : BUILDING_DEMOLISH_TIME[action.building]) * 1000;
-
-  // Calculate remaining time and clamp progress between 0.0 and 1.0
-  const timeLeft = action.readyAt - now;
-  const progress = Math.max(0, Math.min(1, 1 - (timeLeft / totalDurationMs)));
-
-  // 1. Calculate Hex Screen Positions
-  const worldX = size * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
-  // Using the same layout scale matching your drawBuildingIcon function
-  const worldY = size * (3.5 / 2.333 * r);
-
-  const x = (worldX - camera.x) * camera.zoom + ctx.canvas.width / 2;
-  const y = (worldY - camera.y) * camera.zoom + ctx.canvas.height / 2;
-
-  // Dimensions scaled dynamically by map zoom layers
-  const s = size * camera.zoom * 0.35;
-  const barWidth = s * 1.5;
-  const barHeight = Math.max(4, 5 * camera.zoom);
-  
-  // Position the bar right underneath the building foundation pad
-  const barX = x - barWidth / 2;
-  const barY = y + s * 1.0; 
-
-  ctx.save();
-
-  // 2. Draw Background Container Track (Dark Capsule)
-  ctx.fillStyle = "rgba(10, 12, 15, 0.85)";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
-  ctx.lineWidth = 1;
-  
-  ctx.beginPath();
-  ctx.roundRect(barX, barY, barWidth, barHeight, barHeight / 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 3. Draw Inner Fill Progress
-  if (progress > 0) {
-    // Dynamic Fill Theme Selection
-    ctx.fillStyle = action.actionType === "CONSTRUCTING" 
-      ? "#34d399"  // Bright Emerald Green
-      : "#f87171"; // Industrial Coral Red
-
-    const fillWidth = barWidth * progress;
-
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, fillWidth, barHeight, barHeight / 2);
-    ctx.fill();
-  }
-
+  ctx.clip();
+  ctx.fillStyle = getStripePattern(ctx)!;
+  ctx.fillRect(pts[0][0] - 100, pts[0][1] - 100, 200, 200);
   ctx.restore();
 }
