@@ -35,3 +35,7 @@ making those actions no longer instant (also implemented UI progress bar for the
 ---------------------------
 12.6.2026. - greatly optimized main render loop in client to handle visualization of tiles in batches and greatly optimized
 tile text processing
+---------------------------
+11.7.2026. - fixed visual bug where if player started building and in the meantime got eliminated the UI
+for building would stay on neutral tile. Fix so building effects are not active until fully constructed 
+and removed when fully demolished. Temporarily disable Siege building.

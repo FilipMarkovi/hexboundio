@@ -32,6 +32,7 @@ let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
 let hoveredHex: { q: number; r: number } | null = null;
 export let connectedByPlayer = new Map<PlayerId, Set<string>>();
+export let myPlannedBuildingCounts: Record<string, number> = {};
 export let myConTileCount: number | null = 0;
 
 const DRAG_THRESHOLD = 14; // pixels
@@ -59,8 +60,28 @@ export const { sendIntent } = connect(wsUrl, {
         connectedByPlayer.set(p.id, getConnectedTilesFromHQ_Client(state, p.id));
       }
     }
-    
+
+    // Tracking under construction and active buildings for button greyout limits
+    myPlannedBuildingCounts = {};
+
     const meId = clientNetState.playerId;
+    if (meId && state) {
+      for (const tile of state.tiles.values()) {
+        if (tile.ownerId === meId) {
+          // Track existing, fully operational layouts
+          if (tile.building) {
+            const bKey = tile.building.toLowerCase();
+            myPlannedBuildingCounts[bKey] = (myPlannedBuildingCounts[bKey] || 0) + 1;
+          }
+          // Track building footprints currently under a construction timer
+          if (tile.buildingAction && tile.buildingAction.actionType === "CONSTRUCTING") {
+            const bKey = tile.buildingAction.building.toLowerCase();
+            myPlannedBuildingCounts[bKey] = (myPlannedBuildingCounts[bKey] || 0) + 1;
+          }
+        }
+      }
+    }
+    
     myConTileCount = connectedByPlayer.get(meId ?? "")?.size ?? 0;
 
     const me = meId ? state.players.get(meId) : null;
@@ -269,7 +290,7 @@ function loop() {
 
   updateLobbyUI();
   updatePlacementTimerUI(state);
-  updateBuildButtons(state, me);
+  updateBuildButtons(state, me, myPlannedBuildingCounts);
 
   const canRenderMap =
     state &&

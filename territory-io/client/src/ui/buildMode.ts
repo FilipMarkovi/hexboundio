@@ -3,14 +3,6 @@ import { BUILDING_COST, BUILDING_LIMIT } from "../constants";
 import { clientUIState } from "../state/clientState";
 import { clientNetState } from "../state/clientState";
 
-function getCost(type: BuildingType): number {
-  return BUILDING_COST[type]
-}
-
-function getLimit(type: BuildingType): number {
-  return BUILDING_LIMIT[type]
-}
-
 export function toggleBuildMode(type: BuildingType) {
   const state = clientNetState.state;
   const me = clientNetState.playerId;
@@ -19,11 +11,11 @@ export function toggleBuildMode(type: BuildingType) {
   const player = state.players.get(me);
   if (!player) return;
 
-  const cost = getCost(type);
+  const cost = BUILDING_COST[type];
   const countkey = type.toString().toLowerCase() as keyof typeof player.buildings;
 
   // not enough gold or limit reached skip
-  if (player.gold < cost || (player.buildings[countkey] >= getLimit(type))) return;
+  if (player.gold < cost || (player.buildings[countkey] >= BUILDING_LIMIT[type])) return;
 
   // clear ability so they cant build and buy ability at the same time
   clientUIState.selectedAbility = null;

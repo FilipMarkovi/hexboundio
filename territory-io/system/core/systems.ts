@@ -1,14 +1,15 @@
 
-import { isNumberObject } from "node:util/types";
-import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect, PlayerState, PlayerEffectType, PlayerEffect } from "../../shared/index.js";
+import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect, PlayerState,
+  PlayerEffectType, PlayerEffect, getTotalPlannedCount, incrementPending, decrementPending,
+  getPendingCount } from "../../shared/index.js";
 import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
-   HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
-    GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
-     DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
-    DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
+  HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
+  GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
+  DEMOLISH_REFUND_RATIO, GOLD_PEAK, ARMY_PEAK,  DEFENSE_HEAT_MAX, DEFENSE_HEAT_DECAY_MS,
+  DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
   PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGTHS, EFFECT_COSTS, BUILDING_CONSTRUCTION_TIME,
-BUILDING_DEMOLISH_TIME} from "./constants.js";
+  BUILDING_DEMOLISH_TIME} from "./constants.js";
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
@@ -185,11 +186,22 @@ export function tryBuild(
   if (tile.building !== null || tile.buildingAction !== null) return false;
   if (player.gold < BUILDING_COST[buildingType]) return false;
   if (!isTileConnectedToHQ(state, playerId, q, r)) return false;
+  if(buildingType == "SIEGE_OUTPOST") return false; // TEMPORARY DISABLE ATTACK BUILDINGS
   const bKey = buildingType.toLowerCase() as keyof typeof player.buildings;
-  if(player.buildings[bKey] >= BUILDING_LIMIT[buildingType]) return false
+
+  let constructingCount = 0;
+  for (const t of state.tiles.values()) {
+    if (
+      t.ownerId === playerId &&
+      t.buildingAction?.actionType === "CONSTRUCTING" &&
+      t.buildingAction?.building === buildingType
+    ) {
+      constructingCount++;
+    }
+  }
+  if(player.buildings[bKey] + constructingCount >= BUILDING_LIMIT[buildingType]) return false
 
   player.gold -= BUILDING_COST[buildingType];
-  player.buildings[bKey]++;
 
   const durationMs = BUILDING_CONSTRUCTION_TIME[buildingType] * 1000; // in ms
   tile.buildingAction = {
@@ -272,16 +284,8 @@ export function tick(state: CoreGameState, dt: number) {
         const prevBuilding = t.building;
         const wasHQ = t.building === "HQ";
 
-        // if there was construction/demolishing action
+        // if there was construction/demolishing action (HAS TO BE BEFORE BUILDING CLEARING)
         if (t.buildingAction) {
-          if (t.buildingAction.actionType === "CONSTRUCTING" && prevOwner) {
-            const originalOwner = state.players.get(prevOwner);
-            if (originalOwner) {
-              const bKey = t.buildingAction.building.toLowerCase() as keyof typeof originalOwner.buildings;
-              originalOwner.buildings[bKey] = Math.max(0, originalOwner.buildings[bKey] - 1);
-            }
-          }
-          // Clear out the pending construction or demolition action
           t.buildingAction = null; 
         }
 
@@ -359,6 +363,8 @@ export function tick(state: CoreGameState, dt: number) {
         if (action.actionType === "CONSTRUCTING") {
           // Finalize structure assembly
           t.building = action.building;
+          const bKey = action.building.toLowerCase() as keyof typeof tileOwner.buildings;
+          tileOwner.buildings[bKey] = Math.min(BUILDING_LIMIT[action.building], tileOwner.buildings[bKey] + 1);
           if (action.building === "FORT") {
             recalcDefense(state);
           }
@@ -480,6 +486,7 @@ export function handlePlayerDeath(
       tile.ownerId = null;
       tile.building = null;
       tile.defense = 1; // base defense (will be recalculated anyway)
+      tile.buildingAction = null;
     }
   }
 

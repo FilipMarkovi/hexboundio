@@ -148,7 +148,7 @@ export function drawHexEffectsBatch(
     // EFFECT 2: DEFENSE HEAT (The 10-second "Heat")
     if (timeSinceLast < DEFENSE_HEAT_DECAY_MS && tile.defenseHeat > 0) {
       const p = 1 - (timeSinceLast / DEFENSE_HEAT_DECAY_MS);
-      const radius = renderSize * 0.76;
+      const radius = renderSize * 0.75;
       
       ctx.save();
       const heatColor = tile.defenseHeat >= 3 ? "#ec2d2d" : "#ec9150d7";

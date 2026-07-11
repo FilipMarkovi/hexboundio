@@ -18,7 +18,7 @@ const defs: BtnDef[] = [
   { type: "BARRACKS", key: "2", label: "Barracks", cost: BUILDING_COST["BARRACKS"], limit: BUILDING_LIMIT["BARRACKS"], description: "Increases production rate of army." },
   { type: "HOUSE", key: "3", label: "House", cost: BUILDING_COST["HOUSE"], limit: BUILDING_LIMIT["HOUSE"], description: "Increases maximum population size." },
   { type: "LABORATORY", key: "4", label: "Laboratory", cost: BUILDING_COST["LABORATORY"], limit: BUILDING_LIMIT["LABORATORY"], description: "Unlocks ability to buy buffs and debuffs." },
-  { type: "SIEGE_OUTPOST", key: "5", label: "Siege Outpost", cost: BUILDING_COST["SIEGE_OUTPOST"], limit: BUILDING_LIMIT["SIEGE_OUTPOST"], description: "Offense oriented building that grants the ability to use special attacks within its range." },
+  //{ type: "SIEGE_OUTPOST", key: "5", label: "Siege Outpost", cost: BUILDING_COST["SIEGE_OUTPOST"], limit: BUILDING_LIMIT["SIEGE_OUTPOST"], description: "Offense oriented building that grants the ability to use special attacks within its range." },
 ];
 
 type ResearchDef = {
@@ -164,7 +164,7 @@ for (const r of researchDefs) {
   }
 }
 
-export function updateBuildButtons(state: CoreGameState | null, me: PlayerId | null) {
+export function updateBuildButtons(state: CoreGameState | null, me: PlayerId | null, myPlannedBuildingCounts: Record<string, number>) {
   const container = document.getElementById("build-ui");
   const researchContainer = document.getElementById("research-ui");
   if (!container || !researchContainer) return;
@@ -185,17 +185,26 @@ export function updateBuildButtons(state: CoreGameState | null, me: PlayerId | n
   researchContainer.style.display = hasLaboratory ? "flex" : "none";
 
   // --- UPDATE BUILD BUTTONS LOGIC ---
-  for (const d of defs) {
+for (const d of defs) {
     const btn = btnByType.get(d.type);
     if (!btn) continue;
 
+    const buildingKey = d.type.toLowerCase();
+    
+    // FETCH CACHED COUNTS: Completed + Under Construction
+    const plannedCount = myPlannedBuildingCounts[buildingKey] ?? 0;
+    
+    // raw value only for text string rendering displays
+    const currentCount = p.buildings[buildingKey as keyof typeof p.buildings] ?? 0;
+
     const affordable = p.gold >= d.cost;
     const selected = clientUIState.selectedBuilding === d.type;
-    const buildingKey = d.type.toLowerCase() as keyof typeof p.buildings;
-    const currentCount = p.buildings[buildingKey] ?? 0;
-    const disable = (!affordable || (currentCount >= d.limit));
+    
+    // FIX: Base button validation limits entirely on total footprints!
+    const disable = (!affordable || (plannedCount >= d.limit));
 
     btn.disabled = disable;
+    // UI text remains clean, showing your true active structures
     btn.textContent = `[${d.key}] ` + d.label + ` (${currentCount}/${d.limit})`;
     btn.style.opacity = !disable ? "1" : "0.35";
     btn.style.cursor = !disable ? "pointer" : "not-allowed";
