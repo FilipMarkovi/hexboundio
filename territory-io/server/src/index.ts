@@ -233,11 +233,20 @@ export function startMatchIfReady(room: GameRoom) {
   broadcastLobby();
 }
 
+let tickCount = 0;
+let totalTickTimeMs = 0;
+let lastMetricsLog = Date.now();
+
 let bot_tick = 8;
+
 // SERVER TICK LOOP
 setInterval(() => {
   const now = Date.now();
-  bot_tick = (bot_tick + 1) % 9
+  bot_tick = (bot_tick + 1) % 9;
+  
+  let currentRoomCount = rooms.size;
+  let currentPlayerCount = playerRoom.size;
+
   for (const room of rooms.values()) {
     if (!room.state.started) continue;
     if (room.closing) continue;
@@ -254,10 +263,30 @@ setInterval(() => {
     if (bot_tick == 0)
       runBots(room);
     tick(room.state, dt);
-    checkGameOver(room.state)
+    checkGameOver(room.state);
     broadcastRoomState(room);
   }
-  //console.log("tick time: ",Date.now() - now, ", Rooms count: ", rooms.size, " Player count: ", playerRoom.size)
+
+  const tickDuration = Date.now() - now;
+  totalTickTimeMs += tickDuration;
+  tickCount++;
+
+  // log every 60 seconds
+  if (now - lastMetricsLog >= 60000) {
+    const avgTickTime = tickCount > 0 ? (totalTickTimeMs / tickCount).toFixed(2) : "0.00";
+    
+    console.log(`[METRICS] --- ${new Date().toISOString()} ---`);
+    console.log(`  Active Rooms:  ${currentRoomCount}`);
+    console.log(`  Total Players: ${currentPlayerCount}`);
+    console.log(`  Avg Tick Time: ${avgTickTime}ms (over ${tickCount} ticks)`);
+    console.log(`--------------------------------------`);
+
+    // Reset metrics for the next minute
+    tickCount = 0;
+    totalTickTimeMs = 0;
+    lastMetricsLog = now;
+  }
+
 }, TICK_RATE);
  
 
