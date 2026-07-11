@@ -1,5 +1,5 @@
 
-import type { CoreGameState } from "../../shared";
+import type { CoreGameState } from "../../shared/index.js";
 
 let timerRoot: HTMLDivElement;
 let timerTextEl: HTMLDivElement;

@@ -1,11 +1,11 @@
-import type { TileState, PlayerId, BuildingType } from "../../../shared";
-import { canCaptureClient } from "../utils/canCapture";
-import { camera } from "./camera";
-import { getStripePattern } from "./patterns";
-import { FILL_ALPHA } from "../constants";
-import { darken } from "./playerColors";
-import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants";
-import { tileTextures } from "./assetManager";
+import type { TileState, PlayerId, BuildingType } from "../../../shared/index.js";
+import { canCaptureClient } from "../utils/canCapture.js";
+import { camera } from "./camera.js";
+import { getStripePattern } from "./patterns.js";
+import { FILL_ALPHA } from "../constants/index.js";
+import { darken } from "./playerColors.js";
+import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants/index.js";
+import { tileTextures } from "./assetManager.js";
 
 /**
  * BATCH PASS 1: Renders background textures, team color overlays, and 

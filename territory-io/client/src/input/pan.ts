@@ -1,4 +1,4 @@
-import { camera } from "../render/camera";
+import { camera } from "../render/camera.js";
 
 let dragging = false;
 let lastX = 0;

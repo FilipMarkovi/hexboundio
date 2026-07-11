@@ -1,7 +1,7 @@
 // server/ai/queueBotManager.ts
 
 import crypto from "node:crypto";
-import type { GameRoom } from "../util/rooms";
+import type { GameRoom } from "../util/rooms.js";
 import {
   setPlayer,
   PLAYER_COLORS,
@@ -9,7 +9,7 @@ import {
   STARTING_ARMY,
   getRandomNames,
   TIME_TO_AI_AUTOFILL,
-} from "../../../system";
+} from "../../../system/index.js";
 import { broadcastLobby,startMatchIfReady } from "../index.js";
 import { start } from "node:repl";
 

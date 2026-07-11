@@ -2,8 +2,8 @@
 
 import { CoreGameState, nonOwnedNeighbors, getConnectedTilesFromHQ, neighborTiles, getTile,
    BUILDING_COST, BUILDING_LIMIT, hexDistance, PIVOT_DIST, STEEPNESS, key, Intent, canStartCapture,
-  ARMY_CAP_PER_TILE, BASE_ARMY_MAX, HOUSE_ARMY_CAP_BONUS} from "../../../system";
-import { PlayerId, TileState } from "../../../shared";
+  ARMY_CAP_PER_TILE, BASE_ARMY_MAX, HOUSE_ARMY_CAP_BONUS} from "../../../system/index.js";
+import { PlayerId, TileState } from "../../../shared/index.js";
 
 export function shuffle<T>(arr: T[]) {
   for (let i = arr.length - 1; i > 0; i--) {

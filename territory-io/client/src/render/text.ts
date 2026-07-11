@@ -1,5 +1,5 @@
 // --- IN YOUR TEXT RENDERING FILE ---
-import { camera } from "./camera";
+import { camera } from "./camera.js";
 
 /**
  * HIGH-PERFORMANCE TEXT PIPELINE:

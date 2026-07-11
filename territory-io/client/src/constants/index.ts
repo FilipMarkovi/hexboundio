@@ -1,3 +1,3 @@
-export * from "./game"
-export * from "./world"
-export * from "./render"
+export * from "./game.js"
+export * from "./world.js"
+export * from "./render.js"

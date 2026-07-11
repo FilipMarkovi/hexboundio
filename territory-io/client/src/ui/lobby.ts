@@ -1,4 +1,4 @@
-import { clientNetState, clientUIState } from "../state/clientState";
+import { clientNetState, clientUIState } from "../state/clientState.js";
 
 let lobbyRoot: HTMLDivElement;
 let returnRoot: HTMLDivElement;

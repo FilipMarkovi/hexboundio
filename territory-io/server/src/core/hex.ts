@@ -1,4 +1,4 @@
-import { Axial } from "../../../shared"
+import { Axial } from "../../../shared/index.js"
 
 export const DIRS: Axial[] = [
   { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },

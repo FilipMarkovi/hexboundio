@@ -1,8 +1,8 @@
-import { CoreGameState, MAPS } from "../../../system";
-import { PlayerId } from "../../../shared";
+import { CoreGameState, MAPS } from "../../../system/index.js";
+import { PlayerId } from "../../../shared/index.js";
 import crypto from "node:crypto";
-import { createGameState } from "../../../system";
-import { greatriver } from "../../../system/maps/instances/thegreatriver";
+import { createGameState } from "../../../system/index.js";
+import { greatriver } from "../../../system/maps/instances/thegreatriver.js";
 
 export type RoomId = string;
 

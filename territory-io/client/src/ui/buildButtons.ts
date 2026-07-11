@@ -1,8 +1,8 @@
-import type { CoreGameState, PlayerId, BuildingType, PlayerEffectType } from "../../../shared";
-import { BUILDING_COST, BUILDING_LIMIT, DEMOLISH_REFUND_RATIO, EFFECT_COSTS, EFFECT_DURATIONS } from "../constants";
-import { clientUIState } from "../state/clientState";
-import { toggleBuildMode } from "./buildMode";
-import { toggleAbilityMode } from "./abilityMode";
+import type { CoreGameState, PlayerId, BuildingType, PlayerEffectType } from "../../../shared/index.js";
+import { BUILDING_COST, BUILDING_LIMIT, DEMOLISH_REFUND_RATIO, EFFECT_COSTS, EFFECT_DURATIONS } from "../constants/index.js";
+import { clientUIState } from "../state/clientState.js";
+import { toggleBuildMode } from "./buildMode.js";
+import { toggleAbilityMode } from "./abilityMode.js";
 
 type BtnDef = {
   type: BuildingType;

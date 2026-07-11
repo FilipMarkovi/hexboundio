@@ -1,5 +1,5 @@
-import type { CoreGameState, PlayerId } from "../../../shared";
-import { HEX_DIRECTIONS } from "../constants";
+import type { CoreGameState, PlayerId } from "../../../shared/index.js";
+import { HEX_DIRECTIONS } from "../constants/index.js";
 
 export function key(q: number, r: number) {
   return `${q},${r}`;

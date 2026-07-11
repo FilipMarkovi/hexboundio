@@ -1,6 +1,6 @@
 // client/utils/canCaptureClient.ts
-import { PlayerId, CoreGameState } from "../../../shared";
-import { BASE_CAPTURE_COST, HEX_DIRECTIONS } from "../constants";
+import { PlayerId, CoreGameState } from "../../../shared/index.js";
+import { BASE_CAPTURE_COST, HEX_DIRECTIONS } from "../constants/index.js";
 
 export function captureCost(defense: number) {
   return BASE_CAPTURE_COST * defense;

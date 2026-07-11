@@ -13,11 +13,11 @@ import {
   type WireState,
   checkGameOver
 } from "../../system/index.js";
-import { initMap } from "./init/initMap";
+import { initMap } from "./init/initMap.js";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
-import { runBots } from "./ai/botManager";
-import { handleQueueBots } from "./ai/queueBotManager";
-import { PlayerId } from "../../shared";
+import { runBots } from "./ai/botManager.js";
+import { handleQueueBots } from "./ai/queueBotManager.js";
+import { PlayerId } from "../../shared/index.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,10 +28,11 @@ const __dirname = path.dirname(__filename);
 const PORT = 6767;
 const HOST = '0.0.0.0';
 const app = express();
-app.use(express.static(path.join(__dirname, "../../client/dist")));
-app.get("*", (_, res) => {
-  res.sendFile(path.join(__dirname, "../../client/dist/index.html"));
+
+app.get("/", (_, res) => {
+  res.send("Hexbound backend engine is running smoothly.");
 });
+
 const server =app.listen(PORT, HOST, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

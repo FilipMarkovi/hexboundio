@@ -1,7 +1,7 @@
-import type { BuildingType } from "../../../shared";
-import { BUILDING_COST, BUILDING_LIMIT } from "../constants";
-import { clientUIState } from "../state/clientState";
-import { clientNetState } from "../state/clientState";
+import type { BuildingType } from "../../../shared/index.js";
+import { BUILDING_COST, BUILDING_LIMIT } from "../constants/index.js";
+import { clientUIState } from "../state/clientState.js";
+import { clientNetState } from "../state/clientState.js";
 
 export function toggleBuildMode(type: BuildingType) {
   const state = clientNetState.state;

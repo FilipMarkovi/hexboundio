@@ -1,6 +1,6 @@
-import { clientUIState, clientNetState } from "../state/clientState";
-import { PlayerEffectType } from "../../../shared";
-import { EFFECT_COSTS } from "../constants";
+import { clientUIState, clientNetState } from "../state/clientState.js";
+import { PlayerEffectType } from "../../../shared/index.js";
+import { EFFECT_COSTS } from "../constants/index.js";
 
 export function toggleAbilityMode(type: PlayerEffectType) {
   const state = clientNetState.state;

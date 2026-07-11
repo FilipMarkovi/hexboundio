@@ -1,4 +1,4 @@
-import { camera, MIN_ZOOM, MAX_ZOOM } from "../render/camera";
+import { camera, MIN_ZOOM, MAX_ZOOM } from "../render/camera.js";
 
 export function initZoom(canvas: HTMLCanvasElement) {
   canvas.addEventListener("wheel", (e) => {

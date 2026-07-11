@@ -1,6 +1,6 @@
 const GOLD_SCALE = 1;
 
-import { TerrainType } from "../../shared";
+import { TerrainType } from "../../shared/index.js";
 
 // World
 export const TERRAIN_BASE_DEFENSE: Record<TerrainType, number> = {

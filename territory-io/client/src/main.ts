@@ -6,27 +6,27 @@ import {
   drawBuildingsBatch, 
   drawCaptureHexBatch, 
   drawBuildingProgressBarsBatch 
-} from "./render/hexRender";
-import { drawHexTextBatch } from "./render/text";
-import { pixelToAxial } from "./utils/hexMath";
-import { drawHUD,drawTargetingHUD } from "./ui/hud";
-import { connect } from "./net/socket";
-import { clientNetState,clientUIState } from "./state/clientState";
-import type { CoreGameState, PlayerId } from "../../shared";
-import { initPan } from "./input/pan";
-import { initZoom } from "./input/zoom";
-import { camera } from "./render/camera";
-import { HEX_SIZE } from "./constants";
-import { clearBuildMode } from "./ui/buildMode";
-import { initKeyboard } from "./input/keyboard";
-import { initBuildButtons, updateBuildButtons } from "./ui/buildButtons";
-import { getConnectedTilesFromHQ_Client } from "./utils/supply";
-import { drawTileInfo } from "./ui/tileInfo";
-import { initLobbyUI, updateLobbyUI } from "./ui/lobby";
-import { addGameLog, drawGameLogs } from "./ui/hud";
-import { loadGameTextures } from "./render/assetManager";
-import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer";
-import { clearAbilityMode } from "./ui/abilityMode";
+} from "./render/hexRender.js";
+import { drawHexTextBatch } from "./render/text.js";
+import { pixelToAxial } from "./utils/hexMath.js";
+import { drawHUD,drawTargetingHUD } from "./ui/hud.js";
+import { connect } from "./net/socket.js";
+import { clientNetState,clientUIState } from "./state/clientState.js";
+import type { CoreGameState, PlayerId } from "../../shared/index.js";
+import { initPan } from "./input/pan.js";
+import { initZoom } from "./input/zoom.js";
+import { camera } from "./render/camera.js";
+import { HEX_SIZE } from "./constants/index.js";
+import { clearBuildMode } from "./ui/buildMode.js";
+import { initKeyboard } from "./input/keyboard.js";
+import { initBuildButtons, updateBuildButtons } from "./ui/buildButtons.js";
+import { getConnectedTilesFromHQ_Client } from "./utils/supply.js";
+import { drawTileInfo } from "./ui/tileInfo.js";
+import { initLobbyUI, updateLobbyUI } from "./ui/lobby.js";
+import { addGameLog, drawGameLogs } from "./ui/hud.js";
+import { loadGameTextures } from "./render/assetManager.js";
+import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer.js";
+import { clearAbilityMode } from "./ui/abilityMode.js";
 
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;

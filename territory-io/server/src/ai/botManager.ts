@@ -1,8 +1,8 @@
 // server/ai/botManager.ts
 
-import type { GameRoom } from "../util/rooms";
-import { applyIntent } from "../../../system";
-import { smartAI } from "./simpleExpandBot";
+import type { GameRoom } from "../util/rooms.js";
+import { applyIntent } from "../../../system/index.js";
+import { smartAI } from "./simpleExpandBot.js";
 
 const botCooldowns = new Map<string, number>();
 

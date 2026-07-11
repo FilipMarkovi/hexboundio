@@ -1,5 +1,5 @@
-import { toggleBuildMode, clearBuildMode } from "../ui/buildMode";
-import { toggleAbilityMode, clearAbilityMode } from "../ui/abilityMode";
+import { toggleBuildMode, clearBuildMode } from "../ui/buildMode.js";
+import { toggleAbilityMode, clearAbilityMode } from "../ui/abilityMode.js";
 
 
 export function initKeyboard() {

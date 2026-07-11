@@ -1,4 +1,4 @@
-import type { CoreGameState, PlayerId, BuildingType } from "./gameTypes"; 
+import type { CoreGameState, PlayerId, BuildingType } from "./gameTypes.js"; 
 
 function createZeroedBuildingCounts() {
   return {

@@ -1,5 +1,5 @@
 
-import { deserializeState, type WireState } from "../../../shared";
+import { deserializeState, type WireState } from "../../../shared/index.js";
 
 export type ServerMsg =
   | { type: "WELCOME"; playerId: string; requiredPlayers: number }

@@ -1,8 +1,8 @@
 
-import { clientNetState } from "../state/clientState";
-import { clientUIState } from "../state/clientState";
-import { BASE_GOLD_MAX, BASE_ARMY_MAX, ARMY_CAP_PER_TILE, TICK_RATE, HOUSE_ARMY_CAP_BONUS} from "../constants";
-import { myConTileCount } from "../main";
+import { clientNetState } from "../state/clientState.js";
+import { clientUIState } from "../state/clientState.js";
+import { BASE_GOLD_MAX, BASE_ARMY_MAX, ARMY_CAP_PER_TILE, TICK_RATE, HOUSE_ARMY_CAP_BONUS} from "../constants/index.js";
+import { myConTileCount } from "../main.js";
 
 let lastArmy = 0;
 let lastGold = 0;
