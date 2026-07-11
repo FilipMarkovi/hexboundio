@@ -40,7 +40,7 @@ const DRAG_THRESHOLD = 14; // pixels
 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsUrl = window.location.hostname === "localhost"
   ? "ws://localhost:8080" 
-  : "wss://server.hexbound.io";
+  : "wss://hexbound-backend.onrender.com";
 
 export const { sendIntent } = connect(wsUrl, {
   onWelcome: (id, requiredPlayers) => {
