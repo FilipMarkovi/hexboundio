@@ -39,3 +39,9 @@ tile text processing
 11.7.2026. - fixed visual bug where if player started building and in the meantime got eliminated the UI
 for building would stay on neutral tile. Fix so building effects are not active until fully constructed 
 and removed when fully demolished. Temporarily disable Siege building.
+---------------------------
+16.7.2026. - connect database to frontend and backend, add google login
+---------------------------
+17.7.2026. - slightly redesign lobby, add logout option, fix handleJoinLobby, add UpdatePlayerStats function,
+returnToLobby function, make and use universal function for gold/army amount change, add additional
+playerStats to database, add tracking and updating playerstats on livegames and database

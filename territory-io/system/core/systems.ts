@@ -13,7 +13,7 @@ import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
-import { sendPlayerLog } from "../../server/src/index.js";
+import { sendPlayerLog, updatePlayerStat } from "../../server/src/index.js";
 
 export type Intent =
   | { type: "PLACE_HQ"; q: number; r: number }
@@ -138,7 +138,7 @@ export function tryCapture(
   if (player.army < cost) return false;
 
   // Pay upfront (important for commitment)
-  player.army -= cost;
+  modifyPlayerResources(state, player, 'army', -cost);
 
   // Start capture
   tile.capture = {
@@ -164,7 +164,7 @@ export function tryDefend(state: CoreGameState, playerId: PlayerId, q: number, r
   const cost = Math.ceil(tile.capture.cost * (DEFEND_COST_RATIO + heatCostIncrease)) ;
   if (player.army < cost) return false;
 
-  player.army -= cost;
+  modifyPlayerResources(state, player, 'army', -cost);
   tile.capture = null; // cancel capture
 
   tile.defenseHeat = Math.min(tile.defenseHeat + 1, DEFENSE_HEAT_MAX); 
@@ -201,7 +201,7 @@ export function tryBuild(
   }
   if(player.buildings[bKey] + constructingCount >= BUILDING_LIMIT[buildingType]) return false
 
-  player.gold -= BUILDING_COST[buildingType];
+  modifyPlayerResources(state, player, 'gold', -BUILDING_COST[buildingType]);
 
   const durationMs = BUILDING_CONSTRUCTION_TIME[buildingType] * 1000; // in ms
   tile.buildingAction = {
@@ -324,7 +324,8 @@ export function tick(state: CoreGameState, dt: number) {
           }
         }
         if(attackingPlayer && !t.ownerId){
-          attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense)
+          const gain = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense) - attackingPlayer.gold;
+          if (gain !== 0) modifyPlayerResources(state, attackingPlayer, 'gold', gain);
           sendPlayerLog(attackingPlayer.id, `+${NEUTRAL_TILE_CAPTURE_GOLD * t.baseDefense} Gold (Tile Captured)`, "#eab308");  
         }
         
@@ -332,13 +333,16 @@ export function tick(state: CoreGameState, dt: number) {
         t.defenseHeat = 0;
         t.lastDefendedAt = 0;
         t.capture = null;
+        updatePlayerStat(by, "tilesCaptured", 1)
 
         recalcDefense(state);
 
         if (wasHQ && prevOwner && prevOwner !== by) {
           handlePlayerDeath(state, prevOwner);
+          updatePlayerStat(by, "playersEliminated", 1);
           if(attackingPlayer){
-            attackingPlayer.gold = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + PLAYER_KILL_GOLD_REWARD)
+            const gain = Math.min(BASE_GOLD_MAX, attackingPlayer.gold + PLAYER_KILL_GOLD_REWARD) - attackingPlayer.gold;
+            if (gain !== 0) modifyPlayerResources(state, attackingPlayer, 'gold', gain);
             sendPlayerLog(attackingPlayer.id, `+${PLAYER_KILL_GOLD_REWARD} Gold (Eliminated Player)`, "#eab308");  
           }
         }
@@ -374,7 +378,8 @@ export function tick(state: CoreGameState, dt: number) {
           const cost = BUILDING_COST[action.building];
           const refund = Math.floor(cost * DEMOLISH_REFUND_RATIO);
           
-          tileOwner.gold = Math.min(BASE_GOLD_MAX, tileOwner.gold + refund);
+          const gain = Math.min(BASE_GOLD_MAX, tileOwner.gold + refund) - tileOwner.gold;
+          if (gain !== 0) modifyPlayerResources(state, tileOwner, 'gold', gain);
           
           const bKey = action.building.toLowerCase() as keyof typeof tileOwner.buildings;
           tileOwner.buildings[bKey] = Math.max(0, tileOwner.buildings[bKey] - 1);
@@ -424,15 +429,21 @@ export function tick(state: CoreGameState, dt: number) {
     const armyMult = Math.max(0.4, 1 - 2.2 * Math.pow(ratio - ARMY_PEAK, 2)); // 2.2 is slope decline rate, higher number faster falloff from optimum
     const goldMult = Math.max(0.4, 1 - 1.95 * Math.pow(ratio - GOLD_PEAK, 2)); // exponent is width of bell
 
-    p.gold = Math.min(
-      BASE_GOLD_MAX,
-      p.gold + (owned * GOLD_PER_TILE + GOLD_PASSIVE) * dt * goldMult
-    );
+    {
+      const goldGain = Math.min(
+        BASE_GOLD_MAX,
+        p.gold + (owned * GOLD_PER_TILE + GOLD_PASSIVE) * dt * goldMult
+      ) - p.gold;
+      if (goldGain !== 0) modifyPlayerResources(state, p, 'gold', goldGain);
+    }
 
-    p.army = Math.min(
-      armyCap,
-      p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS + owned * ARMY_PER_TILE) * dt * armyMult * armyEffectMult
-    );
+    {
+      const armyGain = Math.min(
+        armyCap,
+        p.army + (ARMY_PASSIVE + barracks * BARRACKS_ARMY_BONUS + owned * ARMY_PER_TILE) * dt * armyMult * armyEffectMult
+      ) - p.army;
+      if (armyGain !== 0) modifyPlayerResources(state, p, 'army', armyGain);
+    }
   }
 }
 
@@ -494,6 +505,8 @@ export function handlePlayerDeath(
   const player = state.players.get(deadPlayerId);
   if (player) {
     player.eliminated = true;
+    updatePlayerStat(player.id, "placement", 8)
+    updatePlayerStat(player.id, "survivalTimeSeconds", Date.now())
   }
   
 
@@ -507,23 +520,26 @@ export function handlePlayerDeath(
 export function checkGameOver(state: CoreGameState) {
   let aliveCount = 0;
   let lastAliveUsername: string | null = null;
+  let lastAliveId: string | null = null;
   let realPlayerInRoom = 0;
+
   for (const p of state.players.values()) {
-    if(!p.isBot) realPlayerInRoom++;
+    if (!p.isBot) realPlayerInRoom++;
     if (p.status === "PLAYING" && !p.eliminated) {
       aliveCount += 1;
       lastAliveUsername = p.username;
+      lastAliveId = p.id;
     }
   }
 
-  if ((aliveCount <= 1 && lastAliveUsername)) {
+  if (aliveCount <= 1 && lastAliveUsername) {
     state.gameOver = { winner: lastAliveUsername };
-  }
-  if (realPlayerInRoom <= 0) {
-    if (lastAliveUsername)
-      state.gameOver = { winner: lastAliveUsername };
-    else
-      state.gameOver = { winner: "BOTS" }
+    if (lastAliveId) {
+      updatePlayerStat(lastAliveId, "placement", 1);
+      updatePlayerStat(lastAliveId, "survivalTimeSeconds", Date.now());
+    }
+  } else if (realPlayerInRoom <= 0) {
+    state.gameOver = { winner: lastAliveUsername ? lastAliveUsername : "BOTS" };
   }
 }
 
@@ -665,7 +681,7 @@ export function tryBuyPlayerEffect(
   if (caster.gold < cost) return;
 
   // reduce gold by cost
-  caster.gold -= cost;
+  modifyPlayerResources(state, caster, 'gold', -cost);
   
   const duration = EFFECT_DURATIONS[effectType] ?? 10_000;
   applyEffectToPlayer(state, targetId, effectType, duration, casterId);
@@ -706,4 +722,23 @@ export function applyEffectToPlayer(
   }
 
   return true;
+}
+
+export function modifyPlayerResources(
+  state: CoreGameState, 
+  player: PlayerState, 
+  resource: 'gold' | 'army', 
+  amount: number // can be positive or negative
+) {
+  if (!player) return;
+
+  if (resource === 'gold') {
+    player.gold += amount;
+    if (amount < 0 && !player.isBot)
+      updatePlayerStat(player.id, 'goldSpent', -amount);
+  } else if (resource === 'army') {
+    player.army += amount;
+    if (amount < 0 && !player.isBot)
+      updatePlayerStat(player.id, 'armySpent', -amount);
+  }
 }

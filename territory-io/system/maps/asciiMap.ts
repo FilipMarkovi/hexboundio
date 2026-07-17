@@ -15,7 +15,7 @@ export function asciiToGameMap(
   name?: string
 ): GameMapDefinition {
   const hexes: GameMapDefinition["hexes"] = [];
-  const playercount: GameMapDefinition["playerCount"] = 8;
+  const playercount: GameMapDefinition["playerCount"] = 6;
   // remove empty lines but KEEP indentation
   const lines = ascii
     .split("\n")

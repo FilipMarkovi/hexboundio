@@ -27,6 +27,7 @@ import { addGameLog, drawGameLogs } from "./ui/hud.js";
 import { loadGameTextures } from "./render/assetManager.js";
 import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer.js";
 import { clearAbilityMode } from "./ui/abilityMode.js";
+import { supabase } from "./utils/db.js";
 
 let mouseDownPos: { x: number; y: number } | null = null;
 let didDrag = false;
@@ -39,13 +40,19 @@ const DRAG_THRESHOLD = 14; // pixels
 
 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsUrl = window.location.hostname === "localhost"
-  ? "ws://localhost:8080" 
+  ? "ws://localhost:6767" 
   : "wss://hexboundio.onrender.com";
 
-export const { sendIntent } = connect(wsUrl, {
-  onWelcome: (id, requiredPlayers) => {
+export const { sendIntent, tryAuth } = connect(wsUrl, {
+  onWelcome: async (id, requiredPlayers) => {
     clientNetState.playerId = id;
     clientNetState.lobby = { connected: 0, required: requiredPlayers };
+
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session && session.access_token) {
+      tryAuth(session.access_token);
+    }
   },
   onLobby: (connected, required) => {
     clientNetState.lobby = { connected, required };
@@ -275,17 +282,27 @@ window.addEventListener("mouseup", () => {
   mouseDownPos = null;
 });
 
-let lastTime = performance.now();
+let lastFrameTime = performance.now();
 export let deltaTime = 0;
+const targetFps = 60;
+const frameDuration = 1000 / targetFps; // ~16.67ms
 
 function loop() {
-  const currentTime = performance.now();
-  deltaTime = (currentTime - lastTime) / 1000;
-  lastTime = currentTime;
-
   requestAnimationFrame(loop);
-  if (clientUIState.phase !== "GAME_OVER")
+
+  const currentTime = performance.now();
+  const elapsed = currentTime - lastFrameTime;
+
+  if (elapsed < frameDuration) {
+    return; 
+  }
+
+  deltaTime = elapsed / 1000;
+  lastFrameTime = currentTime - (elapsed % frameDuration);
+
+  if (clientUIState.phase !== "GAME_OVER") {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
 
   const state = clientNetState.state as CoreGameState | null;
   const me = clientNetState.playerId;
@@ -311,7 +328,6 @@ function loop() {
     const halfH = canvas.height / 2;
     const cullRadius = HEX_SIZE * camera.zoom * 2.0;
 
-    // 1. ALLOCATION-FREE SCREEN PREPARATION ARRAYS
     const visibleTiles: any[] = [];
 
     for (const tile of state.tiles.values()) {
@@ -320,7 +336,6 @@ function loop() {
       const x = (worldX - camera.x) * camera.zoom + halfW;
       const y = (worldY - camera.y) * camera.zoom + halfH;
 
-      // Viewport Frustum Culling
       if (x < -cullRadius || x > canvas.width + cullRadius || y < -cullRadius || y > canvas.height + cullRadius) {
         continue;
       }
@@ -336,7 +351,6 @@ function loop() {
         }
       }
 
-      // Garbage Collection Fix: Arguments passed directly with zero object instantiations
       const { color, fillAlpha } = getTileColor(
         tile,
         hovered,
@@ -367,31 +381,17 @@ function loop() {
       });
     }
 
-    // =================================================================
-    // THE HIGH-PERFORMANCE BATCHED RECONSTRUCTION PIPELINE
-    // =================================================================
-    
-    // Pass A: Hex layouts, Terrain patterns, and Grid lines
+    // High-performance batched pipeline execution passes
     drawHexBatch(ctx, visibleTiles, HEX_SIZE);
-
-    // Pass B: Stun flashes and orange defensive heat elements
     drawHexEffectsBatch(ctx, visibleTiles, HEX_SIZE);
-
-    // Pass C: Base foundation pads and building vector curves
     drawBuildingsBatch(ctx, visibleTiles, HEX_SIZE);
-
-    // Pass D: Real-time action/construction progress counters
     drawBuildingProgressBarsBatch(ctx, visibleTiles, HEX_SIZE);
-
-    // Pass E: Smooth sector conquest border tracking animations
     drawCaptureHexBatch(ctx, visibleTiles, HEX_SIZE, deltaTime);
 
-    // Pass F: Vector font rendering isolated behind a Level of Detail (LOD) threshold
     if (camera.zoom > 0.75) {
       drawHexTextBatch(ctx, visibleTiles, HEX_SIZE);
     }
 
-    // Hovered tile information popup card (Kept separate out of the core map layout loops)
     if (hoveredHex) {
       const hoveredTile = state.tiles.get(`${hoveredHex.q},${hoveredHex.r}`);
       if (hoveredTile && !state.gameOver) {
@@ -407,6 +407,6 @@ function loop() {
 
 setInterval(() => {
   sendIntent({ type: "PING" });
-}, 2000);
+}, 5000);
 
 loop();

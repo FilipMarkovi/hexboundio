@@ -7,7 +7,9 @@ export type ServerMsg =
   | { type: "STATE"; state: WireState }
   | { type: "LOG"; text: string; color?: string };
 
-export type ClientMsg = { type: "INTENT"; intent: any };
+type ClientMsg =
+  | { type: "INTENT"; intent: any }
+  | { type: "AUTH", token: string, };
 
 export function connect(url: string, handlers: {
   onWelcome: (playerId: string, requiredPlayers: number) => void;
@@ -32,5 +34,10 @@ export function connect(url: string, handlers: {
     ws.send(JSON.stringify(out));
   }
 
-  return { ws, sendIntent };
+  function tryAuth(token: any){
+    const out: ClientMsg = { type: "AUTH", token: token };
+    ws.send(JSON.stringify(out));
+  }
+
+  return { ws, sendIntent, tryAuth };
 }

@@ -14,11 +14,12 @@
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build && npm --prefix server run build",
-
     "build:prod": "npm run build --workspaces",
     "start:prod": "node server/dist/server/src/index.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "dotenv": "^17.4.2",
     "express": "^4.21.2"
   },
   "overrides": {

@@ -21,6 +21,7 @@ import { PlayerId } from "../../shared/index.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { supabase } from './database/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,22 +30,27 @@ const PORT = 6767;
 const HOST = '0.0.0.0';
 const app = express();
 
-app.get("/", (_, res) => {
-  res.send("Hexbound backend engine is running smoothly.");
-});
 
 const server =app.listen(PORT, HOST, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
+
 type ClientMsg =
-  | { type: "INTENT"; intent: any };
+  | { type: "INTENT"; intent: any }
+  | { type: "AUTH", token: string, };
 
 export type ServerMsg =
   | { type: "WELCOME"; playerId: string; requiredPlayers: number }
   | { type: "LOBBY"; connected: number; required: number }
   | { type: "STATE"; state: WireState };
 
+interface AuthenticatedSession {
+  dbId: string;      
+  coins: number;      
+}
+
+const authSessions = new Map<PlayerId, AuthenticatedSession>();
 const rooms = new Map<RoomId, GameRoom>();
 let queueRoomId: RoomId;
 const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
@@ -57,6 +63,28 @@ let reset = true;
 ;
 const first = createRoom(rooms);
 queueRoomId = first.id;
+
+export type TrackedStat = 'tilesCaptured' | 'playersEliminated' | 'goldSpent' | 'armySpent' | 'placement' | 'survivalTimeSeconds';
+export function updatePlayerStat(playerId: PlayerId, stat: TrackedStat, amount: number) {
+  if (!playerId || playerId.startsWith("bot")) return;
+
+  const roomId = playerRoom.get(playerId);
+  if (!roomId) return;
+
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  const stats = room.matchStats.get(playerId);
+  if (!stats) return;
+  
+  if (stat === "survivalTimeSeconds") {
+    stats.survivalTimeSeconds = Math.floor((amount - room.createdAt) / 1000);
+  } else if (stat === "placement") {
+    stats.placement = amount;
+  } else {
+    stats[stat] += amount;
+  }
+}
 
 export function sendPlayerLog(playerId: string, text: string, color: string = "#ffffff") {
   const socket = sockets.get(playerId);
@@ -107,12 +135,9 @@ export function broadcastLobby() {
 }
 
 function handleJoinQueue(playerId: PlayerId, username: string) {
-  // Already in a room? ignore (or allow leaving later)
   if (playerRoom.has(playerId)) return;
 
   const room = getQueueRoom();
-
-  // Add player to this room’s state
   const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
 
   setPlayer(room.state, {
@@ -125,18 +150,23 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
     eliminated: false,
     hqPos: { q: 0, r: 0 },
     lastSeen: Date.now(),
-    buildings: {
-      fort: 0,
-      barracks: 0,
-      house: 0,
-      laboratory: 0,
-      siege_outpost: 0,
-    },
+    buildings: { fort: 0, barracks: 0, house: 0, laboratory: 0, siege_outpost: 0 },
     effects: []
   });
 
   room.playerIds.add(playerId);
   playerRoom.set(playerId, room.id);
+
+  const session = authSessions.get(playerId); 
+  room.matchStats.set(playerId, {
+    dbId: session ? session.dbId : `guest-${playerId}`,
+    tilesCaptured: 0,
+    playersEliminated: 0,
+    goldSpent: 0,
+    armySpent: 0,
+    survivalTimeSeconds: 0,
+    placement: 0
+  });
 
   broadcastLobby();
   handleQueueBots(room, playerRoom);
@@ -144,29 +174,27 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
 }
 
 function handleReturnToLobby(pid: PlayerId) {
-  const roomid = playerRoom.get(pid)
-  if(!roomid) return;
+  const roomid = playerRoom.get(pid);
+  if (!roomid) return;
 
-  const room = rooms.get(roomid)
+  const room = rooms.get(roomid);
   if (!room) return;
 
-  const state = room.state
-  if (!state) return;
- 
-  let player = state.players.get(pid)
-  if(!player) return;
-  // Remove player from game state
-  handlePlayerDeath(state, pid);
+  const state = room.state;
+  let player = state.players.get(pid);
+  if (!player) return;
 
-  // Update status
-  player.status = "LOBBY";
-  room.playerIds.delete(pid)
+  room.playerIds.delete(pid);
   playerRoom.delete(pid);
-  
 
-  // Broadcast update
+  handlePlayerDeath(state, pid);
+  room.state.players.delete(pid);
+
+  player.status = "LOBBY";
+
   broadcastRoomState(room);
-  broadcastLobby()
+  broadcastLobby();
+  checkGameOver(state);
 }
 
 function broadcastRoom(room: GameRoom, msg: ServerMsg) {
@@ -186,22 +214,45 @@ function destroyRoomSoon(roomId: RoomId) {
   if (!room || room.closing) return;
   room.closing = true;
 
-  setTimeout(() => {
-    const r = rooms.get(roomId);
-    if (!r) return;
+  const savePromises = [];
 
-    // Return all its players to lobby (not queued, just free to click Play again)
-    for (const pid of r.playerIds) {
-      playerRoom.delete(pid);
-      // Optional: tell client “you are in lobby now” via LOBBY message already
-      // (clients also stop receiving STATE since room is gone)
-    }
+  for (const [playerId, stats] of room.matchStats.entries()) {
+    if (playerId.startsWith("bot")) continue; 
+    if (!stats.dbId || stats.dbId.startsWith("guest-")) continue;
 
-    rooms.delete(roomId);
+    const isWin = stats.placement === 1;
 
-    // Everyone sees the lobby count for current queue room
-    broadcastLobby();
-  }, 5000); // allow winner screen for 5s
+    const dbSave = supabase.rpc('process_match_results', {
+      p_player_id: stats.dbId, 
+      p_coins_earned: 0,
+      p_is_win: isWin,
+      p_tiles_captured: stats.tilesCaptured,
+      p_players_eliminated: stats.playersEliminated,
+      p_gold_spent: stats.goldSpent,
+      p_army_spent: stats.armySpent,
+      p_survival_time: stats.survivalTimeSeconds
+    }).then(({ error }) => {
+      if (error) {
+        console.error(`[SUPABASE ERROR] Failed to save stats for ${stats.dbId}:`, error.message);
+      }
+    });
+
+    savePromises.push(dbSave);
+  }
+
+  Promise.all(savePromises).then(() => {
+    console.log(`[DATABASE] All player records written successfully for room: ${roomId}`);
+    
+    setTimeout(() => {
+      const r = rooms.get(roomId);
+      if (!r) return;
+      for (const pid of r.playerIds) {
+        playerRoom.delete(pid);
+      }
+      rooms.delete(roomId);
+      broadcastLobby();
+    }, 2000);
+  });
 }
 
 export function startMatchIfReady(room: GameRoom) {
@@ -272,7 +323,7 @@ setInterval(() => {
   tickCount++;
 
   // log every 60 seconds
-  if (now - lastMetricsLog >= 60000) {
+  if (now - lastMetricsLog >= 30000) {
     const avgTickTime = tickCount > 0 ? (totalTickTimeMs / tickCount).toFixed(2) : "0.00";
     
     console.log(`[METRICS] --- ${new Date().toISOString()} ---`);
@@ -301,7 +352,7 @@ wss.on("connection", (ws, req) => {
     required: room.maxPlayers
   }));
 
-  ws.on("message", (buf) => {
+  ws.on("message", async (buf) => {
     const now = Date.now();
     let history = intentHistory.get(playerId) || [];
       // Filter out timestamps older than 1 second
@@ -315,9 +366,49 @@ wss.on("connection", (ws, req) => {
     intentHistory.set(playerId, history);
 
     let msg: ClientMsg | null = null;
-    try { msg = JSON.parse(buf.toString()); } catch { return; }
-    if (!msg || msg.type !== "INTENT" || !msg.intent) return;
+    try { msg = JSON.parse(buf.toString()); } catch { console.log("error while json parsing");return; }
+    if (!msg) return;
 
+    // GOOGLE AUTH PROCESSING
+    if (msg.type === "AUTH") {
+      try {
+        // Cryptographically decode and verify the JWT via Supabase Auth
+        const { data: { user }, error: authError } = await supabase.auth.getUser(msg.token);
+        if (authError || !user) throw new Error("Invalid Auth Token");
+
+        const googleUID = user.id;
+
+        // Fetch their permanent profile row
+        let { data: dbPlayer, error: dbError } = await supabase
+          .from('players')
+          .select('id, coins')
+          .eq('id', googleUID)
+          .single();
+
+        authSessions.set(playerId, {
+          dbId: googleUID,
+          coins: dbPlayer?.coins || 0,
+        });
+
+        // if player joined room before auth was done
+        const rid = playerRoom.get(playerId);
+        if (rid) {
+          const room = rooms.get(rid);
+          const stats = room?.matchStats.get(playerId);
+          if (stats && stats.dbId.startsWith("guest-")) {
+            stats.dbId = googleUID;
+          }
+        }
+        
+        ws.send(JSON.stringify({ type: "AUTH_SUCCESS" }));
+      } catch (err) {
+        ws.send(JSON.stringify({ type: "AUTH_FAILURE", reason: "Authentication failed." }));
+      }
+      return;
+    }
+
+    // INTENT PROCESSING
+    if (msg.type !== "INTENT" || !msg.intent) return;
     const intent = msg.intent;
 
     if (intent.type === "JOIN_QUEUE") {
@@ -356,6 +447,7 @@ wss.on("connection", (ws, req) => {
   ws.on("close", () => {
     sockets.delete(playerId);
     intentHistory.delete(playerId);
+    authSessions.delete(playerId);
 
     const rid = playerRoom.get(playerId);
     if (!rid) {

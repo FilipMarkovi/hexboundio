@@ -2,18 +2,29 @@ import { CoreGameState, MAPS } from "../../../system/index.js";
 import { PlayerId } from "../../../shared/index.js";
 import crypto from "node:crypto";
 import { createGameState } from "../../../system/index.js";
-import { greatriver } from "../../../system/maps/instances/thegreatriver.js";
 
 export type RoomId = string;
+
+export interface PlayerMatchStats {
+  dbId: string;
+  tilesCaptured: number;
+  playersEliminated: number;
+  goldSpent: number;
+  armySpent: number;
+  survivalTimeSeconds: number;
+  placement: number;
+}
 
 export type GameRoom = {
   id: RoomId;
   state: CoreGameState;
   playerIds: Set<PlayerId>;  
   lastTickMs: number;
+  createdAt: number;
   closing: boolean;           // to avoid double-destroy
   mapId: string;
   maxPlayers: number;
+  matchStats: Map<PlayerId, PlayerMatchStats>;
 };
 
 type WeightedMap = {
@@ -31,7 +42,7 @@ const MAP_POOL: WeightedMap[] =
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  greatriver: 100,
+  greatriver: 10000,
 };
 
 for (const m of MAP_POOL) {
@@ -84,9 +95,11 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
     state: createGameState(),
     playerIds: new Set(),
     lastTickMs: Date.now(),
+    createdAt: Date.now(),
     closing: false,
     mapId,
     maxPlayers: map.playerCount,
+    matchStats: new Map()
   };
 
   rooms.set(id, room);
