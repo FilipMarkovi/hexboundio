@@ -36,9 +36,13 @@ export function handleQueueBots(
   }
 }
 
-function fillRoomWithBots(
+export function fillRoomWithBots(
   room: GameRoom,
-  playerRoom: Map<string, string>
+  playerRoom: Map<string, string>,
+  options?: {
+    startWhenFull?: boolean;
+    broadcastPublicLobby?: boolean;
+  }
 ) {
   if(room.state.players.size <= 0) return
   const bot_count = room.maxPlayers - room.state.players.size
@@ -77,6 +81,12 @@ function fillRoomWithBots(
     room.playerIds.add(botId);
     playerRoom.set(botId, room.id);
   }
-  broadcastLobby()
-  startMatchIfReady(room)
+
+  if (options?.broadcastPublicLobby !== false) {
+    broadcastLobby();
+  }
+
+  if (options?.startWhenFull !== false) {
+    startMatchIfReady(room);
+  }
 }

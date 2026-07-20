@@ -22,7 +22,7 @@ import { initKeyboard } from "./input/keyboard.js";
 import { initBuildButtons, updateBuildButtons } from "./ui/buildButtons.js";
 import { getConnectedTilesFromHQ_Client } from "./utils/supply.js";
 import { drawTileInfo } from "./ui/tileInfo.js";
-import { initLobbyUI, updateLobbyUI } from "./ui/lobby.js";
+import { handlePrivateLobbyUpdate, initLobbyUI, showError, updateLobbyUI } from "./ui/lobby.js";
 import { addGameLog, drawGameLogs } from "./ui/hud.js";
 import { loadGameTextures } from "./render/assetManager.js";
 import { initPlacementTimerUI,updatePlacementTimerUI } from "./ui/placementTimer.js";
@@ -59,6 +59,12 @@ export const { sendIntent, tryAuth } = connect(wsUrl, {
   },
   onLog: (text, color) => {
     addGameLog(text, color);
+  },
+  onPrivateLobby: (msg) => {
+    handlePrivateLobbyUpdate(msg);
+  },
+  onPrivateError: (reason) => {
+    showError(reason);
   },
   onState: (state) => {
     clientNetState.state = state;

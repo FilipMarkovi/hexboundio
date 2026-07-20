@@ -1,9 +1,12 @@
 import { CoreGameState, MAPS } from "../../../system/index.js";
 import { PlayerId } from "../../../shared/index.js";
 import crypto from "node:crypto";
-import { createGameState } from "../../../system/index.js";
+import { createGameState, setPlayer } from "../../../system/index.js";
 
 export type RoomId = string;
+export const privateRoomCodes = new Map<string, RoomId>();
+const ALPHANUM = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
 
 export interface PlayerMatchStats {
   dbId: string;
@@ -13,6 +16,13 @@ export interface PlayerMatchStats {
   armySpent: number;
   survivalTimeSeconds: number;
   placement: number;
+}
+
+export interface RoomSettings {
+  code: string;           
+  fillWithBots: boolean;
+  maxPlayers: number;
+  hostId: PlayerId;
 }
 
 export type GameRoom = {
@@ -25,6 +35,7 @@ export type GameRoom = {
   mapId: string;
   maxPlayers: number;
   matchStats: Map<PlayerId, PlayerMatchStats>;
+  privateSettings: RoomSettings | null;
 };
 
 type WeightedMap = {
@@ -99,9 +110,62 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
     closing: false,
     mapId,
     maxPlayers: map.playerCount,
-    matchStats: new Map()
+    matchStats: new Map(),
+    privateSettings: null,
   };
 
   rooms.set(id, room);
+  return room;
+}
+
+
+function generateRoomCode(length = 6): string {
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += ALPHANUM.charAt(Math.floor(Math.random() * ALPHANUM.length));
+  }
+  // Ensure uniqueness across active private rooms
+  if (privateRoomCodes.has(code)) {
+    return generateRoomCode(length);
+  }
+  return code;
+}
+
+
+export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fillWithBots?: boolean; maxPlayers?: number }): GameRoom {
+  const roomCode = generateRoomCode();
+  const id = crypto.randomUUID();
+
+  const mapId = pickWeightedMapId();
+  const map = MAPS.get(mapId);
+
+  if (!map) {
+    throw new Error(`Map not found: ${mapId}`);
+  }
+
+  if (options?.maxPlayers && (options.maxPlayers < 2 || options.maxPlayers > 8)) {
+    throw new Error("Invalid maxPlayers value");
+  }
+
+  const room: GameRoom = {
+    id,
+    state: createGameState(),
+    playerIds: new Set(),
+    lastTickMs: Date.now(),
+    createdAt: Date.now(),
+    closing: false,
+    mapId,
+    maxPlayers: options?.maxPlayers ?? 4,
+    matchStats: new Map(),
+    privateSettings: {
+      code: roomCode,
+      fillWithBots: options?.fillWithBots ?? false,
+      maxPlayers: options?.maxPlayers ?? 4,
+      hostId: "",
+    },
+  };
+
+  rooms.set(id, room);
+  privateRoomCodes.set(roomCode, id);
   return room;
 }

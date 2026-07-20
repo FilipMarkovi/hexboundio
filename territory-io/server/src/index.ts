@@ -16,12 +16,13 @@ import {
 import { initMap } from "./init/initMap.js";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager.js";
-import { handleQueueBots } from "./ai/queueBotManager.js";
+import { handleQueueBots, fillRoomWithBots } from "./ai/queueBotManager.js";
 import { PlayerId } from "../../shared/index.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { supabase } from './database/db.js';
+import { privateRoomCodes, createPrivateRoom } from "./util/rooms.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,7 +73,7 @@ export function updatePlayerStat(playerId: PlayerId, stat: TrackedStat, amount: 
   if (!roomId) return;
 
   const room = rooms.get(roomId);
-  if (!room) return;
+  if (!room || room.privateSettings !== null) return;
 
   const stats = room.matchStats.get(playerId);
   if (!stats) return;
@@ -216,38 +217,44 @@ function destroyRoomSoon(roomId: RoomId) {
 
   const savePromises = [];
 
-  for (const [playerId, stats] of room.matchStats.entries()) {
-    if (playerId.startsWith("bot")) continue; 
-    if (!stats.dbId || stats.dbId.startsWith("guest-")) continue;
+  if (room.privateSettings === null) { // Only save stats for public matches
+    for (const [playerId, stats] of room.matchStats.entries()) {
+      if (playerId.startsWith("bot")) continue; 
+      if (!stats.dbId || stats.dbId.startsWith("guest-")) continue;
 
-    const isWin = stats.placement === 1;
+      const isWin = stats.placement === 1;
 
-    const dbSave = supabase.rpc('process_match_results', {
-      p_player_id: stats.dbId, 
-      p_coins_earned: 0,
-      p_is_win: isWin,
-      p_tiles_captured: stats.tilesCaptured,
-      p_players_eliminated: stats.playersEliminated,
-      p_gold_spent: stats.goldSpent,
-      p_army_spent: stats.armySpent,
-      p_survival_time: stats.survivalTimeSeconds
-    }).then(({ error }) => {
-      if (error) {
-        console.error(`[SUPABASE ERROR] Failed to save stats for ${stats.dbId}:`, error.message);
-      }
-    });
+      const dbSave = supabase.rpc('process_match_results', {
+        p_player_id: stats.dbId, 
+        p_coins_earned: 0,
+        p_is_win: isWin,
+        p_tiles_captured: stats.tilesCaptured,
+        p_players_eliminated: stats.playersEliminated,
+        p_gold_spent: stats.goldSpent,
+        p_army_spent: stats.armySpent,
+        p_survival_time: stats.survivalTimeSeconds
+      }).then(({ error }) => {
+        if (error) {
+          console.error(`[SUPABASE ERROR] Failed to save stats for ${stats.dbId}:`, error.message);
+        }
+      });
 
-    savePromises.push(dbSave);
+      savePromises.push(dbSave);
+    }
   }
 
   Promise.all(savePromises).then(() => {
-    console.log(`[DATABASE] All player records written successfully for room: ${roomId}`);
+    if (room.privateSettings === null)
+      console.log(`[DATABASE] All player records written successfully for room: ${roomId}`);
     
     setTimeout(() => {
       const r = rooms.get(roomId);
       if (!r) return;
       for (const pid of r.playerIds) {
         playerRoom.delete(pid);
+      }
+      if (r.privateSettings?.code) {
+        privateRoomCodes.delete(r.privateSettings.code);
       }
       rooms.delete(roomId);
       broadcastLobby();
@@ -276,6 +283,10 @@ export function startMatchIfReady(room: GameRoom) {
   room.lastTickMs = Date.now();
 
   broadcastRoomState(room);
+
+  if (room.privateSettings) {
+    return;
+  }
 
   // mmediately create a new queue room (fresh lobby target)
   const newRoom = createRoom(rooms);
@@ -424,6 +435,61 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    if (intent.type === "CREATE_PRIVATE_ROOM") {
+      if (intent.username && intent.username.length > 15) {
+        intent.username = intent.username.substring(0, 15);
+      }
+      try {
+        createAndHostPrivateRoom(
+          rooms,
+          playerId,
+          intent.username,
+          {
+            fillWithBots: intent.fillWithBots ?? false,
+            maxPlayers: intent.maxPlayers ?? 4,
+          }
+        );
+      } catch (error) {
+        const ws = sockets.get(playerId);
+        if (ws && ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: "PRIVATE_ROOM_ERROR", reason: "CREATE_ROOM_FAILED" }));
+        }
+      }
+      return;
+    }
+
+    if (intent.type === "JOIN_PRIVATE_ROOM") {
+      if (intent.username && intent.username.length > 15) {
+        intent.username = intent.username.substring(0, 15);
+      }
+      const result = handleJoinPrivateRoom(playerId, intent.username, intent.code);
+      if (!result.success) {
+        const ws = sockets.get(playerId);
+        if (ws && ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: "PRIVATE_ROOM_ERROR", reason: result.reason }));
+        }
+      }
+      return;
+    }
+
+    if (intent.type === "START_PRIVATE_MATCH") {
+      const rid = playerRoom.get(playerId);
+      if (!rid) return;
+      const result = startPrivateMatchManually(rid, playerId);
+      if (!result.success) {
+        const ws = sockets.get(playerId);
+        if (ws && ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: "PRIVATE_ROOM_ERROR", reason: result.reason }));
+        }
+      }
+      return;
+    }
+
+    if (intent.type === "LEAVE_PRIVATE_ROOM") {
+      handlePlayerLeavePrivateRoom(playerId);
+      return;
+    }
+
     if (intent.type === "PING") {
       const rid = playerRoom.get(playerId);
       if (!rid) return;
@@ -462,10 +528,15 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    // Handle disconnect if in a private room lobby that hasn't started yet
+    if (room.privateSettings && !room.state.started) {
+      handlePlayerLeavePrivateRoom(playerId);
+      return;
+    }
+
     const player = room.state.players.get(playerId);
 
     if (player?.status === "PLAYING") {
-      // Treat disconnect as defeat
       handlePlayerDeath(room.state, playerId);
     }
 
@@ -477,12 +548,228 @@ wss.on("connection", (ws, req) => {
     // Update lobby if needed
     if (rid === queueRoomId) broadcastLobby();
 
-    // Cleanup empty running games
-    if (room.state.started && room.playerIds.size === 0) {
-      rooms.delete(rid);
+    // Cleanup empty running games when all human players are gone
+    if (room.state.started) {
+      const remainingHumans = [...room.state.players.values()].filter(p => !p.isBot);
+      if (remainingHumans.length === 0) {
+        // Destroy room after a short delay to ensure state is clean
+        destroyRoomSoon(rid);
+      }
     }
   });
 
 });
 
 console.log(`Server running on ws://localhost:${PORT}`);
+
+
+export function handleJoinPrivateRoom(playerId: PlayerId, username: string, code: string) {
+  if (playerRoom.has(playerId)) {
+    return { success: false, reason: "ALREADY_IN_ROOM" };
+  }
+
+  const cleanCode = code.toUpperCase().trim();
+  const roomId = privateRoomCodes.get(cleanCode);
+  if (!roomId) {
+    return { success: false, reason: "ROOM_NOT_FOUND" };
+  }
+
+  const room = rooms.get(roomId);
+
+  if (!room || room.closing) {
+    privateRoomCodes.delete(cleanCode);
+    return { success: false, reason: "ROOM_NOT_FOUND" };
+  }
+
+  if (room.playerIds.size >= room.maxPlayers) {
+    return { success: false, reason: "ROOM_FULL" };
+  }
+
+  if (room.state.started) {
+    return { success: false, reason: "GAME_ALREADY_STARTED" };
+  }
+
+  const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
+
+  setPlayer(room.state, {
+    id: playerId,
+    username,
+    color,
+    status: "QUEUED",
+    gold: STARTING_GOLD,
+    army: STARTING_ARMY,
+    eliminated: false,
+    hqPos: { q: 0, r: 0 },
+    lastSeen: Date.now(),
+    buildings: { fort: 0, barracks: 0, house: 0, laboratory: 0, siege_outpost: 0 },
+    effects: []
+  });
+
+  room.playerIds.add(playerId);
+  playerRoom.set(playerId, room.id);
+
+  const session = authSessions.get(playerId);
+  room.matchStats.set(playerId, {
+    dbId: session ? session.dbId : `guest-${playerId}`,
+    tilesCaptured: 0,
+    playersEliminated: 0,
+    goldSpent: 0,
+    armySpent: 0,
+    survivalTimeSeconds: 0,
+    placement: 0
+  });
+
+  broadcastPrivateRoomLobby(room);
+
+  return { success: true, room };
+}
+
+export function startPrivateMatchManually(roomId: RoomId, requestingPlayerId: PlayerId): { success: true } | { success: false; reason: string } {
+  const room = rooms.get(roomId);
+  if (!room || !room.privateSettings || room.state.started || room.closing) {
+    return { success: false, reason: "INVALID_ROOM_STATE" };
+  }
+
+  if (room.privateSettings.hostId !== requestingPlayerId) {
+    return { success: false, reason: "NOT_HOST" };
+  }
+
+  // Fill empty slots with bots if configured
+  if (room.privateSettings.fillWithBots && room.state.players.size < room.maxPlayers) {
+    fillRoomWithBots(room, playerRoom, {
+      startWhenFull: false,
+      broadcastPublicLobby: false,
+    });
+  }
+
+  // Forces match start even if room is not completely full
+  startPrivateMatch(room);
+  return { success: true };
+}
+
+function startPrivateMatch(room: GameRoom) {
+  if (room.state.started) return;
+
+  const queued = [...room.state.players.values()].filter(p => p.status === "QUEUED");
+
+  for (const p of queued) p.status = "PLAYING";
+
+  const map = MAPS.get(room.mapId);
+  if (!map) {
+    throw new Error(`Map not found at match start: ${room.mapId}`);
+  }
+
+  initMap(room.state, map);
+  startHQPlacementCountdown(room.state, room.id);
+  room.lastTickMs = Date.now();
+
+  broadcastRoomState(room);
+  broadcastLobby();
+}
+
+export function handlePlayerLeavePrivateRoom(playerId: PlayerId) {
+  const roomId = playerRoom.get(playerId);
+  if (!roomId) return;
+
+  const room = rooms.get(roomId);
+  if (!room || !room.privateSettings) return;
+
+  const wasHost = playerId === room.privateSettings.hostId;
+
+  // Remove player from state and trackers
+  room.state.players.delete(playerId);
+  room.playerIds.delete(playerId);
+  room.matchStats.delete(playerId);
+  playerRoom.delete(playerId);
+
+  // Check if any real humans are left
+  const remainingHumans = [...room.state.players.values()].filter(p => !p.isBot);
+
+  if (remainingHumans.length === 0) {
+    // Delete code mapping and purge room immediately
+    if (room.privateSettings.code) {
+      privateRoomCodes.delete(room.privateSettings.code);
+    }
+    rooms.delete(roomId);
+    console.log(`[PRIVATE LOBBY] Room ${roomId} destroyed because no human players remained.`);
+  } else {
+    // Transfer host if the current host left
+    if (wasHost && remainingHumans.length > 0) {
+      const newHost = remainingHumans[0];
+      room.privateSettings.hostId = newHost.id;
+      console.log(`[PRIVATE LOBBY] Host transferred to ${newHost.username} in room ${roomId}`);
+    }
+    
+    // Notify remaining players in the lobby (they'll see new host status)
+    broadcastPrivateRoomLobby(room);
+  }
+}
+
+export function createAndHostPrivateRoom(
+  rooms: Map<RoomId, GameRoom>,
+  hostPlayerId: PlayerId,
+  username: string,
+  options?: { fillWithBots?: boolean; maxPlayers?: number }
+) {
+  if (playerRoom.has(hostPlayerId)) {
+    throw new Error("PLAYER_ALREADY_IN_ROOM");
+  }
+
+  const room = createPrivateRoom(rooms, options);
+
+  // Set the host ID
+  if (room.privateSettings) {
+    room.privateSettings.hostId = hostPlayerId;
+  }
+
+  const color = PLAYER_COLORS[0];
+
+  setPlayer(room.state, {
+    id: hostPlayerId,
+    username,
+    color,
+    status: "QUEUED",
+    gold: STARTING_GOLD,
+    army: STARTING_ARMY,
+    eliminated: false,
+    hqPos: { q: 0, r: 0 },
+    lastSeen: Date.now(),
+    buildings: { fort: 0, barracks: 0, house: 0, laboratory: 0, siege_outpost: 0 },
+    effects: []
+  });
+
+  // 4. Register host in player tracking sets & maps
+  room.playerIds.add(hostPlayerId);
+  playerRoom.set(hostPlayerId, room.id);
+
+  broadcastPrivateRoomLobby(room);
+}
+
+export function broadcastPrivateRoomLobby(room: GameRoom) {
+  if (!room.privateSettings) return;
+
+  // 1. Map player IDs to clean display data
+  const playersList = Array.from(room.playerIds).map((pid) => {
+    const player = room.state.players.get(pid);
+    return {
+      username: player?.username ?? "Unknown",
+    };
+  });
+
+  // 2. Send individual payloads to each player with their isHost status
+  for (const pid of room.playerIds) {
+    if (pid.startsWith("bot")) continue; // Skip bot IDs
+    const ws = sockets.get(pid);
+    if (ws && ws.readyState === ws.OPEN) {
+      const payload = JSON.stringify({
+        type: "PRIVATE_LOBBY",
+        connected: queuedCount(room),
+        required: room.maxPlayers,
+        code: room.privateSettings.code,
+        players: playersList,
+        isHost: pid === room.privateSettings.hostId
+      });
+      ws.send(payload);
+    }
+  }
+}
