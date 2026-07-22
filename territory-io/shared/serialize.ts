@@ -1,38 +1,244 @@
+import type { CoreGameState, TileState, PlayerState } from "./gameTypes.js";
 
-import type { CoreGameState } from "../system/core/state.js";
+// --- ENUM MAPPINGS (O(1) lookups) ---
+const TERRAIN_MAP: Record<string, number> = { GRASS: 0, MOUNTAIN: 1, BEDROCK: 2, DESERT: 3, WATER: 4 };
+const TERRAIN_REV = ["GRASS", "MOUNTAIN", "BEDROCK", "DESERT", "WATER"] as const;
 
-export type WireState = {
-  phase: any;
-  tiles: any[];
-  players: any[];
-  started: boolean;
-  gameOver: any;
-  HQLocations: any;
-  placementTimeLeft: any;
-};
+const BLD_MAP: Record<string, number> = { HQ: 0, FORT: 1, BARRACKS: 2, HOUSE: 3, LABORATORY: 4, SIEGE_OUTPOST: 5 };
+const BLD_REV = ["HQ", "FORT", "BARRACKS", "HOUSE", "LABORATORY", "SIEGE_OUTPOST"] as const;
+
+const PHASE_MAP: Record<string, number> = { HQ_PLACEMENT: 0, GAMEPLAY: 1 };
+const PHASE_REV = ["HQ_PLACEMENT", "GAMEPLAY"] as const;
+
+const STATUS_MAP: Record<string, number> = { LOBBY: 0, QUEUED: 1, PLAYING: 2, ELIMINATED: 3 };
+const STATUS_REV = ["LOBBY", "QUEUED", "PLAYING", "ELIMINATED"] as const;
+
+const TILE_EFF_MAP: Record<string, number> = { REINFORCED: 0 };
+const TILE_EFF_REV = ["REINFORCED"] as const;
+
+const PLY_EFF_MAP: Record<string, number> = { ATTACK_SPEED: 0, ARMY_GAIN_BUFF: 1 };
+const PLY_EFF_REV = ["ATTACK_SPEED", "ARMY_GAIN_BUFF"] as const;
+
+// Top level array format:
+// [ phase, started, placementTime, gameOverWinnerSlot, mapId, mapName, players[], tiles[], hqLocs[] ]
+export type WireState = any[]; 
 
 export function serializeState(state: CoreGameState): WireState {
-  return {
-    phase: state.phase,
-    tiles: Array.from(state.tiles.values()),
-    players: Array.from(state.players.values()),
-    started: state.started,
-    gameOver: state.gameOver,
-    HQLocations: state.HQLocations,
-    placementTimeLeft: state.placementTimeLeft,
-  };
+  // 1. Map Player IDs to compact Integer Slots
+  const playerSlots = new Map<string, number>();
+  let slotIndex = 0;
+  for (const playerId of state.players.keys()) {
+    playerSlots.set(playerId, slotIndex++);
+  }
+
+  // 2. Serialize Players
+  const playersArr = Array.from(state.players.values()).map(p => {
+    const pArr: any[] = [
+      p.id,                                // 0: Need full ID here once
+      p.username,                          // 1
+      p.color,                             // 2
+      STATUS_MAP[p.status],                // 3
+      Math.round(p.gold),                  // 4: ROUNDED
+      Math.round(p.army),                  // 5: ROUNDED
+      p.eliminated ? 1 : 0,                // 6
+      p.hqPos.q,                           // 7
+      p.hqPos.r,                           // 8
+      p.lastSeen,                          // 9: EXACT
+      p.isBot ? 1 : 0,                     // 10
+      p.buildings.fort,                    // 11
+      p.buildings.barracks,                // 12
+      p.buildings.house,                   // 13
+      p.buildings.laboratory,              // 14
+      p.buildings.siege_outpost            // 15
+    ];
+
+    if (p.effects.length > 0) {
+      pArr[16] = p.effects.map(e => [
+        PLY_EFF_MAP[e.type],
+        e.durationLeft,                    // EXACT
+        e.sourcePlayerId ? playerSlots.get(e.sourcePlayerId) ?? null : null
+      ]);
+    }
+    return pArr;
+  });
+
+  // 3. Serialize Tiles
+  const tilesArr = Array.from(state.tiles.values()).map(t => {
+    const tArr: any[] = [
+      t.q,                                               // 0
+      t.r,                                               // 1
+      t.ownerId ? playerSlots.get(t.ownerId) ?? null : null, // 2: SLOT
+      Math.round(t.defense),                             // 3: ROUNDED
+      t.building ? BLD_MAP[t.building] : null,           // 4: INT
+      TERRAIN_MAP[t.terrain] ?? 0,                       // 5: INT
+      Math.round(t.baseDefense),                         // 6: ROUNDED
+      
+      // We pad missing nested structures with null so array indices align
+      t.capture ? [                                      // 7: Capture Tuple
+        playerSlots.get(t.capture.by) ?? null,
+        t.capture.progress,                              // EXACT (CRUCIAL)
+        Math.round(t.capture.cost)                       // ROUNDED
+      ] : null,
+      
+      t.buildingAction ? [                               // 8: Action Tuple
+        BLD_MAP[t.buildingAction.building],
+        t.buildingAction.readyAt,                        // EXACT (CRUCIAL)
+        t.buildingAction.actionType === "CONSTRUCTING" ? 0 : 1
+      ] : null,
+      
+      t.effects.length > 0 ? t.effects.map(e => [        // 9: Effects Tuple Array
+        TILE_EFF_MAP[e.type],
+        e.durationLeft,                                  // EXACT
+        e.sourcePlayerId ? playerSlots.get(e.sourcePlayerId) ?? null : null
+      ]) : null,
+
+      t.defenseHeat || null,                             // 10: EXACT (CRUCIAL)
+      t.lastDefendedAt || null                           // 11: EXACT (CRUCIAL)
+    ];
+
+    // TRUNCATE TAIL: Pop off any trailing nulls. 
+    // If a tile has no capture, action, effects, and heat/defense are 0, 
+    // the array stops at index 6, saving massive space.
+    while (tArr.length > 0 && tArr[tArr.length - 1] === null) {
+      tArr.pop();
+    }
+    return tArr;
+  });
+
+  // 4. De-duplicate HQ Locations (Just send [slot, q, r])
+  const hqLocsArr = Array.from(state.HQLocations.entries()).map(([pId, tile]) => [
+    playerSlots.get(pId) ?? -1,
+    tile.q,
+    tile.r
+  ]);
+
+  // 5. Build Top Level
+  return [
+    PHASE_MAP[state.phase],                              // 0
+    state.started ? 1 : 0,                               // 1
+    state.placementTimeLeft ?? null,                     // 2
+    state.gameOver ? playerSlots.get(state.gameOver.winner) ?? null : null, // 3
+    state.mapId,                                         // 4
+    state.mapName,                                       // 5
+    playersArr,                                          // 6
+    tilesArr,                                            // 7
+    hqLocsArr                                            // 8
+  ];
 }
 
 export function deserializeState(raw: WireState): CoreGameState {
+  const slotToPlayerId = new Map<number, string>();
+
+  // 1. Rebuild Players First (We need the slot IDs for tiles)
+  const players = new Map<string, PlayerState>();
+  const rawPlayers: any[] = raw[6] || [];
+  
+  for (let i = 0; i < rawPlayers.length; i++) {
+    const pArr = rawPlayers[i];
+    const pId = pArr[0];
+    slotToPlayerId.set(i, pId);
+
+    const effRaw = pArr[16];
+    
+    players.set(pId, {
+      id: pId,
+      username: pArr[1],
+      color: pArr[2],
+      status: STATUS_REV[pArr[3]] as any,
+      gold: pArr[4],
+      army: pArr[5],
+      eliminated: pArr[6] === 1,
+      hqPos: { q: pArr[7], r: pArr[8] },
+      lastSeen: pArr[9],
+      isBot: pArr[10] === 1,
+      buildings: {
+        fort: pArr[11],
+        barracks: pArr[12],
+        house: pArr[13],
+        laboratory: pArr[14],
+        siege_outpost: pArr[15]
+      },
+      effects: effRaw ? effRaw.map((e: any) => ({
+        type: PLY_EFF_REV[e[0]] as any,
+        durationLeft: e[1],
+        sourcePlayerId: e[2] !== null ? slotToPlayerId.get(e[2]) ?? null : null
+      })) : []
+    });
+  }
+
+  // Helper to map slot integer back to player string
+  const getPId = (slot: number | null) => slot !== null ? slotToPlayerId.get(slot) ?? null : null;
+
+  // 2. Rebuild Tiles
+  const tiles = new Map<string, TileState>();
+  const rawTiles: any[] = raw[7] || [];
+
+  for (const tArr of rawTiles) {
+    const q = tArr[0];
+    const r = tArr[1];
+    
+    const capRaw = tArr[7];
+    const actRaw = tArr[8];
+    const effRaw = tArr[9];
+
+    const tileObj: TileState = {
+      q,
+      r,
+      ownerId: getPId(tArr[2]),
+      defense: tArr[3],
+      building: tArr[4] !== null ? BLD_REV[tArr[4]] as any : null,
+      terrain: TERRAIN_REV[tArr[5]] as any,
+      baseDefense: tArr[6],
+      
+      capture: capRaw ? {
+        by: getPId(capRaw[0])!,
+        progress: capRaw[1],
+        cost: capRaw[2]
+      } : null,
+      
+      buildingAction: actRaw ? {
+        building: BLD_REV[actRaw[0]] as any,
+        readyAt: actRaw[1],
+        actionType: actRaw[2] === 0 ? "CONSTRUCTING" : "DEMOLISHING"
+      } : null,
+      
+      effects: effRaw ? effRaw.map((e: any) => ({
+        type: TILE_EFF_REV[e[0]] as any,
+        durationLeft: e[1],
+        sourcePlayerId: getPId(e[2])
+      })) : [],
+
+      defenseHeat: tArr[10] ?? 0,
+      lastDefendedAt: tArr[11] ?? 0
+    };
+
+    tiles.set(`${q},${r}`, tileObj);
+  }
+
+  // 3. Rebuild HQ Locations Map (Using exact TileState references from the map!)
+  const HQLocations = new Map<string, TileState>();
+  const rawHQs: any[] = raw[8] || [];
+  for (const [slot, q, r] of rawHQs) {
+    const pId = getPId(slot);
+    const tileRef = tiles.get(`${q},${r}`);
+    if (pId && tileRef) {
+      HQLocations.set(pId, tileRef);
+    }
+  }
+
+  // 4. Return Assembly
+  const goWinnerSlot = raw[3];
+  
   return {
-    phase: raw.phase,
-    tiles: new Map(raw.tiles.map((t: any) => [`${t.q},${t.r}`, t])),
-    players: new Map(raw.players.map((p: any) => [p.id, p])),
-    started: raw.started,
-    gameOver: raw.gameOver,
-    mapId: null,
-    mapName: null,
-    HQLocations: raw.HQLocations,
-    placementTimeLeft: raw.placementTimeLeft
+    phase: PHASE_REV[raw[0]] as any,
+    started: raw[1] === 1,
+    placementTimeLeft: raw[2],
+    gameOver: goWinnerSlot !== null ? { winner: getPId(goWinnerSlot)! } : null,
+    mapId: raw[4],
+    mapName: raw[5],
+    players,
+    tiles,
+    HQLocations,
+    connectedCache: null
   };
 }

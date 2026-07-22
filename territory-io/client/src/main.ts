@@ -413,8 +413,4 @@ function loop() {
   drawGameLogs(ctx);
 }
 
-setInterval(() => {
-  sendIntent({ type: "PING" });
-}, 5000);
-
 loop();

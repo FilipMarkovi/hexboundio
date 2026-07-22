@@ -1,5 +1,4 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { checkAFKPlayers } from "./util/afk.js";
 import crypto from "node:crypto";
 import {
   applyIntent,
@@ -23,6 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { supabase } from './database/db.js';
 import { privateRoomCodes, createPrivateRoom } from "./util/rooms.js";
+import { CoreGameState } from "../../shared/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,7 +58,26 @@ const playerRoom = new Map<PlayerId, RoomId>(); // player -> room
 const sockets = new Map<PlayerId, WebSocket>();
 const intentHistory = new Map<PlayerId, number[]>();
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+  server,
+  perMessageDeflate: {
+    zlibDeflateOptions: {
+      // Use FAST compression (level 1 or 3) to keep CPU overhead negligible
+      level: 3,
+      chunkSize: 1024,
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024,
+    },
+    // Only compress messages larger than 1KB (skip tiny pings/intents)
+    threshold: 1024, 
+    
+    // Server/Client memory optimization (prevents allocating 256KB per connection)
+    serverNoContextTakeover: true,
+    clientNoContextTakeover: true,
+  },
+});
+
 let last = Date.now();
 let reset = true;
 ;
@@ -206,7 +225,61 @@ function broadcastRoom(room: GameRoom, msg: ServerMsg) {
   }
 }
 
+export function logStateBreakdown(state: CoreGameState) {
+  const wireObj = serializeState(state); // Array: [phase, started, placementTimeLeft, gameOverWinner, mapId, mapName, players, tiles, hqLocs]
+  const totalJson = JSON.stringify(wireObj);
+  const totalBytes = Buffer.byteLength(totalJson, "utf8");
+
+  // Map array indices to human-readable field labels
+  const INDEX_LABELS = [
+    "phase",
+    "started",
+    "placementTimeLeft",
+    "gameOverWinnerSlot",
+    "mapId",
+    "mapName",
+    "players",
+    "tiles",
+    "hqLocs",
+  ];
+
+  const breakdown = wireObj.map((value, idx) => {
+    const keyLabel = INDEX_LABELS[idx] ?? `Index [${idx}]`;
+    const keyJson = JSON.stringify(value ?? null);
+    const bytes = Buffer.byteLength(keyJson, "utf8");
+    const kb = (bytes / 1024).toFixed(2);
+    const percentage = totalBytes > 0 ? ((bytes / totalBytes) * 100).toFixed(1) : "0.0";
+
+    return {
+      Key: keyLabel,
+      "Size (KB)": `${kb} KB`,
+      Bytes: bytes,
+      "Share (%)": `${percentage}%`,
+    };
+  });
+
+  // Sort heaviest to lightest
+  breakdown.sort((a, b) => b.Bytes - a.Bytes);
+
+  console.log(`\n--- STATE BREAKDOWN (${(totalBytes / 1024).toFixed(2)} KB Total) ---`);
+  console.table(breakdown);
+
+  // Extract tiles array (index 7) for per-tile metrics
+  const tilesArr = wireObj[7];
+  if (Array.isArray(tilesArr) && tilesArr.length > 0) {
+    const tilesJson = JSON.stringify(tilesArr);
+    const tilesBytes = Buffer.byteLength(tilesJson, "utf8");
+    const avgPerTile = (tilesBytes / tilesArr.length).toFixed(1);
+
+    console.log(`Tile Count: ${tilesArr.length}`);
+    console.log(`Average Payload per Tile: ~${avgPerTile} Bytes`);
+  }
+
+  console.log("-------------------------------------------\n");
+}
+
 function broadcastRoomState(room: GameRoom) {
+  //logStateBreakdown(room.state);
   broadcastRoom(room, { type: "STATE", state: serializeState(room.state) });
 }
 
@@ -488,16 +561,6 @@ wss.on("connection", (ws, req) => {
 
     if (intent.type === "LEAVE_PRIVATE_ROOM") {
       handlePlayerLeavePrivateRoom(playerId);
-      return;
-    }
-
-    if (intent.type === "PING") {
-      const rid = playerRoom.get(playerId);
-      if (!rid) return;
-      const room = rooms.get(rid);
-      if (!room) return;
-      const p = room.state.players.get(playerId);
-      if (p) p.lastSeen = Date.now();
       return;
     }
 

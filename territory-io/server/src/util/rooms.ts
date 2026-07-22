@@ -28,6 +28,7 @@ export interface RoomSettings {
 export type GameRoom = {
   id: RoomId;
   state: CoreGameState;
+  lastBroadcastHash: number;
   playerIds: Set<PlayerId>;  
   lastTickMs: number;
   createdAt: number;
@@ -104,6 +105,7 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
   const room: GameRoom = {
     id,
     state: createGameState(),
+    lastBroadcastHash: 0,
     playerIds: new Set(),
     lastTickMs: Date.now(),
     createdAt: Date.now(),
@@ -150,6 +152,7 @@ export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fill
   const room: GameRoom = {
     id,
     state: createGameState(),
+    lastBroadcastHash: 0,
     playerIds: new Set(),
     lastTickMs: Date.now(),
     createdAt: Date.now(),
