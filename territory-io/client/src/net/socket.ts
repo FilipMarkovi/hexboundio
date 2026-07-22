@@ -1,5 +1,10 @@
 // net.ts
-import { deserializeState, type WireState } from "../../../shared/index.js";
+import {
+  applyWireStateDelta,
+  deserializeState,
+  type WireState,
+  type WireStateDelta
+} from "../../../shared/index.js";
 
 export type PrivateLobbyMsg = {
   type: "PRIVATE_LOBBY";
@@ -18,7 +23,8 @@ export type PrivateErrorMsg = {
 export type ServerMsg =
   | { type: "WELCOME"; playerId: string; requiredPlayers: number }
   | { type: "LOBBY"; connected: number; required: number }
-  | { type: "STATE"; state: WireState }
+  | { type: "STATE"; full: true; state: WireState }
+  | { type: "STATE"; full: false; delta: WireStateDelta }
   | { type: "LOG"; text: string; color?: string }
   | PrivateLobbyMsg
   | PrivateErrorMsg;
@@ -36,6 +42,7 @@ export function connect(url: string, handlers: {
   onPrivateError?: (reason: string) => void;
 }) {
   const ws = new WebSocket(url);
+  let latestWireState: WireState | null = null;
 
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data) as ServerMsg;
@@ -47,9 +54,18 @@ export function connect(url: string, handlers: {
       case "LOBBY":
         handlers.onLobby(msg.connected, msg.required);
         break;
-      case "STATE":
-        handlers.onState(deserializeState(msg.state));
+      case "STATE": {
+        if (msg.full) {
+          latestWireState = msg.state;
+        } else if (latestWireState) {
+          latestWireState = applyWireStateDelta(latestWireState, msg.delta);
+        } else {
+          break;
+        }
+
+        handlers.onState(deserializeState(latestWireState));
         break;
+      }
       case "LOG":
         handlers.onLog(msg.text, msg.color);
         break;

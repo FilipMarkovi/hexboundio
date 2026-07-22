@@ -23,6 +23,106 @@ const PLY_EFF_REV = ["ATTACK_SPEED", "ARMY_GAIN_BUFF"] as const;
 // [ phase, started, placementTime, gameOverWinnerSlot, mapId, mapName, players[], tiles[], hqLocs[] ]
 export type WireState = any[]; 
 
+export type WireArrayDelta = [newLength: number, changes: Array<[index: number, value: any]>];
+
+export interface WireStateDelta {
+  top: Array<[index: number, value: any]>;
+  players?: WireArrayDelta;
+  tiles?: WireArrayDelta;
+  hqLocs?: WireArrayDelta;
+}
+
+function wireValueEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a === b;
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (!wireValueEqual(a[i], b[i])) return false;
+  }
+  return true;
+}
+
+function createIndexedDelta(prev: any[], next: any[]): WireArrayDelta | null {
+  const changes: Array<[number, any]> = [];
+  const maxLen = Math.max(prev.length, next.length);
+
+  for (let index = 0; index < maxLen; index++) {
+    const hasNext = index < next.length;
+    if (!hasNext) continue;
+
+    const hasPrev = index < prev.length;
+    if (!hasPrev || !wireValueEqual(prev[index], next[index])) {
+      changes.push([index, next[index]]);
+    }
+  }
+
+  if (changes.length === 0 && prev.length === next.length) {
+    return null;
+  }
+
+  return [next.length, changes];
+}
+
+function applyIndexedDelta(base: any[], delta: WireArrayDelta): any[] {
+  const [newLength, changes] = delta;
+  const next = base.slice(0, newLength);
+
+  for (const [index, value] of changes) {
+    next[index] = value;
+  }
+
+  return next;
+}
+
+export function createWireStateDelta(prev: WireState, next: WireState): WireStateDelta | null {
+  const top: Array<[number, any]> = [];
+
+  for (let index = 0; index <= 5; index++) {
+    if (!wireValueEqual(prev[index], next[index])) {
+      top.push([index, next[index]]);
+    }
+  }
+
+  const players = createIndexedDelta((prev[6] as any[]) ?? [], (next[6] as any[]) ?? []);
+  const tiles = createIndexedDelta((prev[7] as any[]) ?? [], (next[7] as any[]) ?? []);
+  const hqLocs = createIndexedDelta((prev[8] as any[]) ?? [], (next[8] as any[]) ?? []);
+
+  if (top.length === 0 && !players && !tiles && !hqLocs) {
+    return null;
+  }
+
+  const delta: WireStateDelta = { top };
+  if (players) delta.players = players;
+  if (tiles) delta.tiles = tiles;
+  if (hqLocs) delta.hqLocs = hqLocs;
+
+  return delta;
+}
+
+export function applyWireStateDelta(base: WireState, delta: WireStateDelta): WireState {
+  const next: WireState = base.slice();
+
+  for (const [index, value] of delta.top) {
+    next[index] = value;
+  }
+
+  if (delta.players) {
+    next[6] = applyIndexedDelta((next[6] as any[]) ?? [], delta.players);
+  }
+
+  if (delta.tiles) {
+    next[7] = applyIndexedDelta((next[7] as any[]) ?? [], delta.tiles);
+  }
+
+  if (delta.hqLocs) {
+    next[8] = applyIndexedDelta((next[8] as any[]) ?? [], delta.hqLocs);
+  }
+
+  return next;
+}
+
 export function serializeState(state: CoreGameState): WireState {
   // 1. Map Player IDs to compact Integer Slots
   const playerSlots = new Map<string, number>();

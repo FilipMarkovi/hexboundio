@@ -1,5 +1,5 @@
 import { CoreGameState, MAPS, ROOM_CODE_LENGTH } from "../../../system/index.js";
-import { PlayerId } from "../../../shared/index.js";
+import { PlayerId, WireState } from "../../../shared/index.js";
 import crypto from "node:crypto";
 import { createGameState, setPlayer } from "../../../system/index.js";
 
@@ -29,6 +29,7 @@ export type GameRoom = {
   id: RoomId;
   state: CoreGameState;
   lastBroadcastHash: number;
+  lastSerializedState: WireState | null;
   playerIds: Set<PlayerId>;  
   lastTickMs: number;
   createdAt: number;
@@ -106,6 +107,7 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
     id,
     state: createGameState(),
     lastBroadcastHash: 0,
+    lastSerializedState: null,
     playerIds: new Set(),
     lastTickMs: Date.now(),
     createdAt: Date.now(),
@@ -153,6 +155,7 @@ export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fill
     id,
     state: createGameState(),
     lastBroadcastHash: 0,
+    lastSerializedState: null,
     playerIds: new Set(),
     lastTickMs: Date.now(),
     createdAt: Date.now(),
