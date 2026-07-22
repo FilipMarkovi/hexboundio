@@ -23,5 +23,6 @@ export const barrier = asciiToGameMap(
      . . . . . . . G D D G G G . . . . . . . . . . . . . . . .
     . . . . . . . G D D G G G . . . . . . . . . . . . . . . . .
   `,
-  "Desert barrier"
+  "Desert barrier",
+  6
 );

@@ -95,5 +95,6 @@ export const HEX_DIRECTIONS = [
   { q: -1, r: 1 },
   { q: 0, r: 1 }
 ];
+export const ROOM_CODE_LENGTH = 6;
 
 export const TICK_RATE = 100 

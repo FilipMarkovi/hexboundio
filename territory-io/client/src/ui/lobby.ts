@@ -1,3 +1,4 @@
+import { ROOM_CODE_LENGTH } from "../constants/index.js";
 import { clientNetState, clientUIState } from "../state/clientState.js";
 import { loginWithGoogle, supabase } from "../utils/db.js"; 
 
@@ -157,8 +158,8 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
       <div style="font:600 16px system-ui; text-align:center;">Join Private Room</div>
 
       <input id="input-room-code"
-        placeholder="6-LETTER CODE"
-        maxlength="6"
+        placeholder="${ROOM_CODE_LENGTH}-LETTER CODE"
+        maxlength="${ROOM_CODE_LENGTH}"
         style="padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#1e293b; color:white; text-align:center; font:700 16px monospace; text-transform:uppercase; letter-spacing:2px;" />
 
       <button id="btn-confirm-join"
@@ -176,7 +177,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
       <div style="text-align:center;">
         <div style="font:500 12px system-ui; color:#94a3b8; letter-spacing:1px; text-transform:uppercase;">Room Code</div>
         <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:2px;">
-          <h2 id="display-room-code" style="font:700 24px monospace; letter-spacing:3px; margin:0; color:#38bdf8;">------</h2>
+          <h2 id="display-room-code" style="font:700 24px monospace; letter-spacing:3px; margin:0; color:#38bdf8;">${"-".repeat(ROOM_CODE_LENGTH)}</h2>
           <button id="btn-copy-code" title="Copy Code" style="background:rgba(255,255,255,0.1); border:none; border-radius:6px; color:white; padding:4px 8px; cursor:pointer;">📋</button>
         </div>
       </div>
@@ -283,8 +284,8 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
     const code = roomCodeInput.value.trim().toUpperCase();
 
     if (!name) return;
-    if (code.length !== 6) {
-      showError("Code must be 6 characters.");
+    if (code.length !== ROOM_CODE_LENGTH) {
+      showError(`Code must be ${ROOM_CODE_LENGTH} characters.`);
       return;
     }
 
@@ -301,7 +302,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   // Copy Room Code
   copyCodeBtn.onclick = () => {
     const code = roomCodeDisplay.textContent;
-    if (code && code !== "------") {
+    if (code && code !== "-".repeat(ROOM_CODE_LENGTH)) {
       navigator.clipboard.writeText(code);
       copyCodeBtn.textContent = "✅";
       setTimeout(() => { copyCodeBtn.textContent = "📋"; }, 1500);

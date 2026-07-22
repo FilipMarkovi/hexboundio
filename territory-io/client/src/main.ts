@@ -38,10 +38,12 @@ export let myConTileCount: number | null = 0;
 
 const DRAG_THRESHOLD = 14; // pixels
 
+const backendHost = window.location.hostname === "localhost"
+  ? "localhost:6767"
+  : "api.ageofhexes.io";
+
 const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsUrl = window.location.hostname === "localhost"
-  ? "ws://localhost:6767" 
-  : "wss://hexboundio.onrender.com";
+const wsUrl = `${protocol}//${backendHost}`;
 
 export const { sendIntent, tryAuth } = connect(wsUrl, {
   onWelcome: async (id, requiredPlayers) => {

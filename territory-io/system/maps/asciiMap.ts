@@ -12,10 +12,10 @@ const CHAR_TO_TERRAIN: Record<string, TerrainType | null> = {
 export function asciiToGameMap(
   id: string,
   ascii: string,
-  name?: string
+  name?: string,
+  playercount: number = 6
 ): GameMapDefinition {
   const hexes: GameMapDefinition["hexes"] = [];
-  const playercount: GameMapDefinition["playerCount"] = 6;
   // remove empty lines but KEEP indentation
   const lines = ascii
     .split("\n")

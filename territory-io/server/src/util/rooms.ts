@@ -1,4 +1,4 @@
-import { CoreGameState, MAPS } from "../../../system/index.js";
+import { CoreGameState, MAPS, ROOM_CODE_LENGTH } from "../../../system/index.js";
 import { PlayerId } from "../../../shared/index.js";
 import crypto from "node:crypto";
 import { createGameState, setPlayer } from "../../../system/index.js";
@@ -119,7 +119,7 @@ export function createRoom(rooms: Map<RoomId, GameRoom>): GameRoom {
 }
 
 
-function generateRoomCode(length = 6): string {
+function generateRoomCode(length = ROOM_CODE_LENGTH): string {
   let code = "";
   for (let i = 0; i < length; i++) {
     code += ALPHANUM.charAt(Math.floor(Math.random() * ALPHANUM.length));
@@ -161,7 +161,7 @@ export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fill
       code: roomCode,
       fillWithBots: options?.fillWithBots ?? false,
       maxPlayers: options?.maxPlayers ?? 4,
-      hostId: "",
+      hostId: "",  // gets set later
     },
   };
 

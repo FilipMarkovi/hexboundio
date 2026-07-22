@@ -299,6 +299,7 @@ let tickCount = 0;
 let totalTickTimeMs = 0;
 let lastMetricsLog = Date.now();
 
+
 let bot_tick = 8;
 
 // SERVER TICK LOOP
@@ -677,6 +678,7 @@ export function handlePlayerLeavePrivateRoom(playerId: PlayerId) {
   const wasHost = playerId === room.privateSettings.hostId;
 
   // Remove player from state and trackers
+  handlePlayerDeath(room.state, playerId)
   room.state.players.delete(playerId);
   room.playerIds.delete(playerId);
   room.matchStats.delete(playerId);

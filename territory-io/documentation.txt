@@ -45,3 +45,5 @@ and removed when fully demolished. Temporarily disable Siege building.
 17.7.2026. - slightly redesign lobby, add logout option, fix handleJoinLobby, add UpdatePlayerStats function,
 returnToLobby function, make and use universal function for gold/army amount change, add additional
 playerStats to database, add tracking and updating playerstats on livegames and database
+---------------------------
+20.7.2026. - fully implement private rooms

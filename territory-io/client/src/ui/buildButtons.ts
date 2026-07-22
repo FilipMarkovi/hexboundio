@@ -33,7 +33,7 @@ type ResearchDef = {
 const researchDefs: ResearchDef[] = [
   { 
     type: "ATTACK_SPEED", 
-    key: "R", 
+    key: "E", 
     label: "Stardust Catalyst", 
     cost: EFFECT_COSTS["ATTACK_SPEED"],
     description: "Instantly injects an adrenaline buff boosting tile capture speeds by 50%.",
@@ -41,7 +41,7 @@ const researchDefs: ResearchDef[] = [
   },
   {
     type: "ARMY_GAIN_BUFF", 
-    key: "E",
+    key: "R",
     label: "Overclock Protocol",
     cost: EFFECT_COSTS["ARMY_GAIN_BUFF"],
     description: `Boost army production by 2x for ${EFFECT_DURATIONS["ARMY_GAIN_BUFF"] / 2000}s, followed by an immediate 0.5x burnout crash for ${EFFECT_DURATIONS["ARMY_GAIN_BUFF"] / 2000}s.`,

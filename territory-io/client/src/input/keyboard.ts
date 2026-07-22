@@ -12,8 +12,8 @@ export function initKeyboard() {
     if (e.key === "4") toggleBuildMode("LABORATORY");
     //if (e.key === "5") toggleBuildMode("SIEGE_OUTPOST")
 
-    if (e.key === "r") toggleAbilityMode("ATTACK_SPEED")
-    if (e.key === "e") toggleAbilityMode("ARMY_GAIN_BUFF")
+    if (e.key === "e") toggleAbilityMode("ATTACK_SPEED")
+    if (e.key === "r") toggleAbilityMode("ARMY_GAIN_BUFF")
 
     if (e.key === "Escape") {
       clearBuildMode();
