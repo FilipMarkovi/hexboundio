@@ -52,7 +52,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   loadingScreenRoot.style.opacity = "1";
 
   loadingScreenRoot.innerHTML = `
-    <div style="font:700 64px system-ui; letter-spacing: 2px; text-transform: uppercase;">Hexbound</div>
+    <div style="font:700 64px system-ui; letter-spacing: 2px; text-transform: uppercase;">Age of Hexes</div>
   `;
   document.body.appendChild(loadingScreenRoot);
 
@@ -82,7 +82,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   topBarRoot.style.boxSizing = "border-box";
 
   topBarRoot.innerHTML = `
-    <div style="font:700 18px system-ui; letter-spacing: 0.5px;">HexBound.io</div>
+    <div style="font:700 18px system-ui; letter-spacing: 0.5px;">AgeOfHexes.io</div>
     <div id="top-bar-auth" style="position: relative;"></div>
   `;
 
@@ -103,7 +103,7 @@ export function initLobbyUI(sendIntent: (intent: any) => void) {
   lobbyRoot.style.zIndex = "50";
 
   lobbyRoot.innerHTML = `
-    <div style="font:700 36px system-ui; margin-bottom: 4px;">Play HexBound</div>
+    <div style="font:700 36px system-ui; margin-bottom: 4px;">Play AgeOfHexes</div>
 
     <input id="name"
       placeholder="username"
