@@ -5,6 +5,7 @@ import {
   type WireState,
   type WireStateDelta
 } from "../../../shared/index.js";
+import { clientNetState } from "../state/clientState.js";
 
 export type PrivateLobbyMsg = {
   type: "PRIVATE_LOBBY";
@@ -23,8 +24,8 @@ export type PrivateErrorMsg = {
 export type ServerMsg =
   | { type: "WELCOME"; playerId: string; requiredPlayers: number }
   | { type: "LOBBY"; connected: number; required: number }
-  | { type: "STATE"; full: true; state: WireState }
-  | { type: "STATE"; full: false; delta: WireStateDelta }
+  | { type: "STATE"; full: true; state: WireState; serverTime?: number }
+  | { type: "STATE"; full: false; delta: WireStateDelta; serverTime?: number }
   | { type: "LOG"; text: string; color?: string }
   | PrivateLobbyMsg
   | PrivateErrorMsg;
@@ -55,6 +56,9 @@ export function connect(url: string, handlers: {
         handlers.onLobby(msg.connected, msg.required);
         break;
       case "STATE": {
+        if (msg.serverTime) {
+          clientNetState.serverClockOffset = msg.serverTime - Date.now();
+        }
         if (msg.full) {
           latestWireState = msg.state;
         } else if (latestWireState) {

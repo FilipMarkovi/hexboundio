@@ -6,6 +6,7 @@ import { FILL_ALPHA } from "../constants/index.js";
 import { darken } from "./playerColors.js";
 import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants/index.js";
 import { tileTextures } from "./assetManager.js";
+import { getServerNow } from "../utils/time.js";
 
 /**
  * BATCH PASS 1: Renders background textures, team color overlays, and 
@@ -114,7 +115,7 @@ export function drawHexEffectsBatch(
   items: any[],
   size: number
 ) {
-  const now = Date.now();
+  const now = getServerNow();
   const renderSize = size * camera.zoom;
 
   for (let i = 0; i < items.length; i++) {
@@ -398,7 +399,7 @@ export function drawBuildingProgressBarsBatch(
   items: any[],
   size: number
 ) {
-  const now = Date.now();
+  const now = getServerNow();
   const s = size * camera.zoom * 0.35;
   const barWidth = s * 1.5;
   const barHeight = Math.max(4, 5 * camera.zoom);

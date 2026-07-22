@@ -24,7 +24,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { supabase } from './database/db.js';
 import { privateRoomCodes, createPrivateRoom } from "./util/rooms.js";
-import { CoreGameState } from "../../shared/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,8 +45,8 @@ type ClientMsg =
 export type ServerMsg =
   | { type: "WELCOME"; playerId: string; requiredPlayers: number }
   | { type: "LOBBY"; connected: number; required: number }
-  | { type: "STATE"; full: true; state: WireState }
-  | { type: "STATE"; full: false; delta: WireStateDelta };
+  | { type: "STATE"; full: true; state: WireState; serverTime?: number }
+  | { type: "STATE"; full: false; delta: WireStateDelta; serverTime?: number };
 
 interface AuthenticatedSession {
   dbId: string;      
@@ -231,10 +230,11 @@ function broadcastRoom(room: GameRoom, msg: ServerMsg) {
 
 function broadcastRoomState(room: GameRoom, forceFull = false) {
   const nextState = serializeState(room.state);
+  const now = Date.now();
 
   if (forceFull || !room.lastSerializedState) {
     room.lastSerializedState = nextState;
-    broadcastRoom(room, { type: "STATE", full: true, state: nextState });
+    broadcastRoom(room, { type: "STATE", full: true, state: nextState, serverTime: now });
     return;
   }
 
@@ -244,17 +244,17 @@ function broadcastRoomState(room: GameRoom, forceFull = false) {
     return;
   }
 
-  const fullMsg = JSON.stringify({ type: "STATE", full: true, state: nextState });
-  const deltaMsg = JSON.stringify({ type: "STATE", full: false, delta });
+  const fullMsg = JSON.stringify({ type: "STATE", full: true, state: nextState, serverTime: now });
+  const deltaMsg = JSON.stringify({ type: "STATE", full: false, delta, serverTime: now });
 
   room.lastSerializedState = nextState;
 
   if (deltaMsg.length >= fullMsg.length) {
-    broadcastRoom(room, { type: "STATE", full: true, state: nextState });
+    broadcastRoom(room, { type: "STATE", full: true, state: nextState, serverTime: now });
     return;
   }
 
-  broadcastRoom(room, { type: "STATE", full: false, delta });
+  broadcastRoom(room, { type: "STATE", full: false, delta, serverTime: now });
 }
 
 function destroyRoomSoon(roomId: RoomId) {

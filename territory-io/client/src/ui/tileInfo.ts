@@ -1,5 +1,6 @@
 import type { CoreGameState, TileState } from "../../../shared/index.js";
 import { DEFEND_COST_RATIO, DEFENSE_HEAT_DECAY_MS, DEFENSE_COST_INCREMENT } from "../constants/index.js";
+import { getServerNow } from "../utils/time.js";
 
 export function drawTileInfo(
   ctx: CanvasRenderingContext2D,
@@ -8,7 +9,7 @@ export function drawTileInfo(
   me: string
 ) {
   ctx.save();
-  const now = Date.now();
+  const now = getServerNow();
 
   const width = 240; // Widened slightly to give badges more room
   const padding = 16;
