@@ -57,7 +57,8 @@ export interface TileState {
 
   capture: {
     by: PlayerId;
-    progress: number;
+    remaining: number; // fraction of completed capture, 0-1
+    completeAt: number; // timestamp for Date.now()
     cost: number;
   } | null;
 

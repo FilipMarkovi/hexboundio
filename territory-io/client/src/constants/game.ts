@@ -9,6 +9,9 @@ export const DEFENSE_HEAT_DECAY_MS = 10000; // 10 seconds to reset
 export const DEFENSE_COST_INCREMENT = 0.2;  // +20% cost per click
 export const TILE_ATTACK_COOLDOWN = 1000;
 
+export const TILES_UNTIL_MAX_ATTACKTIME_INCREASE = 45
+export const MAX_ATTACKTIME_INCREASE = 1 // in seconds
+
 // effects
 export const EFFECT_COSTS = {
   ATTACK_SPEED: 30 * GOLD_SCALE,

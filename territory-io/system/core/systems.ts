@@ -140,11 +140,20 @@ export function tryCapture(
   // Pay upfront (important for commitment)
   modifyPlayerResources(state, player, 'army', -cost);
 
-  // Start capture
+  // Start capture: track remaining work (1..0) and an estimated completion timestamp
+  // Compute initial rate using current attacker modifiers so we can estimate completion
+  const territorySize = state.connectedCache?.get(playerId)?.size ?? 0;
+  const attackingPlayer = state.players.get(playerId);
+  const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1;
+  const rate = (CAPTURE_RATE * SPEED_BOOST) / Math.max(1, tile.defense) /
+    (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1);
+  const durationMs = rate > 0 ? (1000 / rate) : Infinity;
+
   tile.capture = {
     by: playerId,
-    progress: 0,
-    cost
+    remaining: 1, // fraction of work left (1 = just started)
+    cost,
+    completeAt: Date.now() + durationMs
   };
 
   return true;
@@ -262,23 +271,30 @@ export function tick(state: CoreGameState, dt: number) {
     }
 
     if (t.capture) {
-      const { by } = t.capture;
+      const by = t.capture.by;
 
       // If capture conditions no longer valid → cancel
       if (!canContinueCapture(state, by, t.q, t.r)) {
         t.capture = null;
         continue;
       }
-      
-      // capture progress (big territory = slower capture)
-      const territorySize: number = state.connectedCache.get(t.ownerId!)?.size ?? 0;
-      const attackingPlayer = state.players.get(by!)
-      const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1
-      t.capture.progress +=
-        ((CAPTURE_RATE * SPEED_BOOST) / Math.max(1,t.defense) / 
-        (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1)) * dt;
 
-      if (t.capture.progress >= 1) {
+      // capture progress (big territory = slower capture)
+      // Use the attacking player's connected tiles for territory size
+      const territorySize: number = state.connectedCache.get(by!)?.size ?? 0;
+      const attackingPlayer = state.players.get(by!);
+      const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1;
+
+      const rate = (CAPTURE_RATE * SPEED_BOOST) / Math.max(1, t.defense) /
+        (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1);
+
+      const dec = rate * dt;
+      t.capture.remaining = Math.max(0, (t.capture.remaining ?? 1) - dec);
+
+      // Update estimated completion timestamp (for persistence/clients)
+      t.capture.completeAt = t.capture.remaining > 0 ? Date.now() + (t.capture.remaining / Math.max(rate, 1e-6)) * 1000 : Date.now();
+
+      if ((t.capture.remaining ?? 1) <= 0) {
         // === FINISH CAPTURE ===
         const prevOwner = t.ownerId;
         const prevBuilding = t.building;

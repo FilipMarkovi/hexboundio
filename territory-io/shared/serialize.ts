@@ -138,8 +138,8 @@ export function serializeState(state: CoreGameState): WireState {
       p.username,                          // 1
       p.color,                             // 2
       STATUS_MAP[p.status],                // 3
-      Math.round(p.gold),                  // 4: ROUNDED
-      Math.round(p.army),                  // 5: ROUNDED
+      p.gold,                              // 4: EXACT
+      p.army,                              // 5: EXACT
       p.eliminated ? 1 : 0,                // 6
       p.hqPos.q,                           // 7
       p.hqPos.r,                           // 8
@@ -176,8 +176,10 @@ export function serializeState(state: CoreGameState): WireState {
       // We pad missing nested structures with null so array indices align
       t.capture ? [                                      // 7: Capture Tuple
         playerSlots.get(t.capture.by) ?? null,
-        t.capture.progress,                              // EXACT (CRUCIAL)
-        Math.round(t.capture.cost)                       // ROUNDED
+        // remaining fraction (1..0)
+        (t.capture.remaining !== undefined ? t.capture.remaining : 1),
+        Math.round(t.capture.cost),                      // ROUNDED
+        t.capture.completeAt ?? null                     // optional timestamp (ms)
       ] : null,
       
       t.buildingAction ? [                               // 8: Action Tuple
@@ -292,9 +294,10 @@ export function deserializeState(raw: WireState): CoreGameState {
       
       capture: capRaw ? {
         by: getPId(capRaw[0])!,
-        progress: capRaw[1],
-        cost: capRaw[2]
-      } : null,
+        remaining: capRaw[1],
+        cost: capRaw[2],
+        completeAt: capRaw[3] ?? null
+      } as any : null,
       
       buildingAction: actRaw ? {
         building: BLD_REV[actRaw[0]] as any,

@@ -340,7 +340,8 @@ export function drawCaptureHexBatch(
     const { tile, x, y, captureColor } = item;
     if (!tile.capture) continue;
 
-    const serverProgress = tile.capture.progress;
+    // Use remaining -> convert to progress fraction for visuals
+    const serverProgress = tile.capture ? (1 - (tile.capture.remaining ?? 1)) : 0;
     const tileKey = `${tile.q},${tile.r}`;
     
     let visualProgress = visualProgressMap.get(tileKey) ?? 0;
