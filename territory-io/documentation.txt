@@ -47,3 +47,13 @@ returnToLobby function, make and use universal function for gold/army amount cha
 playerStats to database, add tracking and updating playerstats on livegames and database
 ---------------------------
 20.7.2026. - fully implement private rooms
+---------------------------
+22.7.2026. - Heavy network trafic optimisations (20MiB/s per user down to 17KiB/s per user) -> this also improved
+server tick performance, rework capture progress (now uses completeAt and leftover work(1-0)) for smoother progress
+bar, add option to choose maps when creating a private room
+---------------------------
+23.7.2026. - reorganize constants into shared and for private server constants into system,
+fix game over text and return to lobby button, fix capture rate broken calculation formula,
+activate all maps, implement global leaderboard in lobby, rebrand player colors (16 max),
+add option to cancel/leave public lobby queue, add surrender button which instantly 
+self eliminates the player

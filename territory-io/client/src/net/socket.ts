@@ -12,6 +12,8 @@ export type PrivateLobbyMsg = {
   code: string;
   connected: number;
   required: number;
+  mapId: string;
+  fillWithBots: boolean;
   players: Array<{ username: string }>;
   isHost?: boolean;
 };

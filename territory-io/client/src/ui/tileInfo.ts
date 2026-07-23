@@ -1,5 +1,5 @@
 import type { CoreGameState, TileState } from "../../../shared/index.js";
-import { DEFEND_COST_RATIO, DEFENSE_HEAT_DECAY_MS, DEFENSE_COST_INCREMENT } from "../constants/index.js";
+import { DEFEND_COST_RATIO, DEFENSE_HEAT_DECAY_MS, DEFENSE_COST_INCREMENT } from "../../../shared/constants.js";
 import { getServerNow } from "../utils/time.js";
 
 export function drawTileInfo(

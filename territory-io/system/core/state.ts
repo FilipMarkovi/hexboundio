@@ -1,7 +1,7 @@
 
 import type { PlayerId, PlayerState, TileState, GamePhase } from "../../shared/index.js";
 import { getConnectedTilesFromHQ, handlePlayerDeath, recalcDefense } from "./systems.js";
-import { MIN_HQ_DISTANCE } from "./constants.js";
+import { MIN_HQ_DISTANCE } from "./serverConstants.js";
 
 export interface CoreGameState {
   phase: GamePhase;

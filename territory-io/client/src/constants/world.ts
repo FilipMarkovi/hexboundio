@@ -1,3 +1,1 @@
-export const MAP_RADIUS = 5
-export const HEX_SIZE = 30
-export const FILL_ALPHA = 0.5
+export { MAP_RADIUS, HEX_SIZE, FILL_ALPHA } from "../../../shared/constants.js";

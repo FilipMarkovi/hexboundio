@@ -1,6 +1,6 @@
 import type { CoreGameState } from "../../../system/index.js";
 import type { GameMapDefinition } from "../../../system/maps/types.js";
-import { TERRAIN_BASE_DEFENSE } from "../../../system/core/constants.js";
+import { TERRAIN_BASE_DEFENSE } from "../../../system/core/serverConstants.js";
 
 export function initMap(
   state: CoreGameState,

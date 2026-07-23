@@ -1,7 +1,7 @@
 
 import { clientNetState } from "../state/clientState.js";
 import { clientUIState } from "../state/clientState.js";
-import { BASE_GOLD_MAX, BASE_ARMY_MAX, ARMY_CAP_PER_TILE, TICK_RATE, HOUSE_ARMY_CAP_BONUS} from "../constants/index.js";
+import { BASE_GOLD_MAX, BASE_ARMY_MAX, ARMY_CAP_PER_TILE, TICK_RATE, HOUSE_ARMY_CAP_BONUS} from "../../../shared/constants.js";
 import { myConTileCount } from "../main.js";
 
 let lastArmy = 0;
@@ -9,6 +9,36 @@ let lastGold = 0;
 let displayedArmyGain = "0";
 let displayedGoldGain = "0";
 const ticking = 1000 / TICK_RATE
+let surrenderBtnEl: HTMLButtonElement | null = null;
+
+export function initHudUI(sendIntent: (intent: any) => void) {
+  if (surrenderBtnEl) return;
+
+  surrenderBtnEl = document.createElement("button");
+  surrenderBtnEl.textContent = "Surrender";
+  surrenderBtnEl.style.position = "absolute";
+  surrenderBtnEl.style.right = "18px";
+  surrenderBtnEl.style.bottom = "18px";
+  surrenderBtnEl.style.zIndex = "70";
+  surrenderBtnEl.style.padding = "10px 14px";
+  surrenderBtnEl.style.borderRadius = "10px";
+  surrenderBtnEl.style.border = "1px solid rgba(239, 68, 68, 0.45)";
+  surrenderBtnEl.style.background = "rgba(127, 29, 29, 0.75)";
+  surrenderBtnEl.style.color = "#fecaca";
+  surrenderBtnEl.style.font = "700 13px system-ui";
+  surrenderBtnEl.style.cursor = "pointer";
+  surrenderBtnEl.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
+  surrenderBtnEl.style.backdropFilter = "blur(6px)";
+  surrenderBtnEl.style.display = "none";
+
+  surrenderBtnEl.onclick = () => {
+    sendIntent({ type: "SUICIDE" });
+    surrenderBtnEl!.disabled = true;
+    surrenderBtnEl!.style.opacity = "0.7";
+  };
+
+  document.body.appendChild(surrenderBtnEl);
+}
 
 // Helper for rounded rectangles (better aesthetics)
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -71,6 +101,13 @@ export function drawHUD(ctx: CanvasRenderingContext2D) {
   const state = clientNetState.state;
   const me = clientNetState.playerId ? state?.players.get(clientNetState.playerId) : null;
 
+  if (surrenderBtnEl) {
+    const canSurrender = !!state && !!me && clientUIState.phase === "PLAYING" && !state.gameOver && !me.eliminated;
+    surrenderBtnEl.style.display = canSurrender ? "block" : "none";
+    surrenderBtnEl.disabled = false;
+    surrenderBtnEl.style.opacity = "1";
+  }
+
   if (!state || !me) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(10, 10, 150, 30);
@@ -121,19 +158,6 @@ export function drawHUD(ctx: CanvasRenderingContext2D) {
 
   // 4. Gold Bar
   drawStatBar(ctx, 18, 65, me.gold, BASE_GOLD_MAX, "GOLD", "#eab308", displayedGoldGain);
-
-  // 5. Game Over Overlay
-  if (state.gameOver) {
-    
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#f87171";
-    ctx.font = "bold 48px sans-serif";
-    ctx.fillText("GAME OVER", ctx.canvas.width / 2, ctx.canvas.height / 2 - 160);
-    
-    ctx.fillStyle = "#fff";
-    ctx.font = "24px sans-serif";
-    ctx.fillText(`Winner: ${state.gameOver.winner}`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 110);
-  }
 }
 
 export function drawTargetingHUD(ctx: CanvasRenderingContext2D) {

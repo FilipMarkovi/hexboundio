@@ -1,5 +1,5 @@
 import type { BuildingType } from "../../../shared/index.js";
-import { BUILDING_COST, BUILDING_LIMIT } from "../constants/index.js";
+import { BUILDING_COST, BUILDING_LIMIT } from "../../../shared/constants.js";
 import { clientUIState } from "../state/clientState.js";
 import { clientNetState } from "../state/clientState.js";
 

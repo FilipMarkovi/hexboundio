@@ -7,23 +7,23 @@ import {
   serializeState,
   MAPS,
   handlePlayerDeath,
-  PLAYER_COLORS,
   setPlayer, startHQPlacementCountdown,
-  STARTING_GOLD, STARTING_ARMY, TICK_RATE,
   type WireStateDelta,
   type WireState,
   checkGameOver
 } from "../../system/index.js";
+import { STARTING_GOLD, STARTING_ARMY, TICK_RATE } from "../../shared/constants.js";
 import { initMap } from "./init/initMap.js";
 import { RoomId, GameRoom, createRoom  } from "./util/rooms.js";
 import { runBots } from "./ai/botManager.js";
-import { handleQueueBots, fillRoomWithBots } from "./ai/queueBotManager.js";
+import { handleQueueBots, fillRoomWithBots, cancelQueueBots } from "./ai/queueBotManager.js";
 import { PlayerId } from "../../shared/index.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { supabase } from './database/db.js';
 import { privateRoomCodes, createPrivateRoom } from "./util/rooms.js";
+import { getNextAvailablePlayerColor } from "./util/playerColors.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,7 +160,7 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
   if (playerRoom.has(playerId)) return;
 
   const room = getQueueRoom();
-  const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
+  const color = getNextAvailablePlayerColor(room);
 
   setPlayer(room.state, {
     id: playerId,
@@ -195,6 +195,29 @@ function handleJoinQueue(playerId: PlayerId, username: string) {
   startMatchIfReady(room);
 }
 
+function handlePlayerLeaveRoom(playerId: PlayerId) {
+  const roomId = playerRoom.get(playerId);
+  if (!roomId) return false;
+
+  const room = rooms.get(roomId);
+  if (!room || room.privateSettings || room.state.started) return false;
+
+  const player = room.state.players.get(playerId);
+  if (!player || player.status !== "QUEUED") return false;
+
+  room.playerIds.delete(playerId);
+  room.state.players.delete(playerId);
+  room.matchStats.delete(playerId);
+  playerRoom.delete(playerId);
+
+  if (![...room.state.players.values()].some((p) => p.status === "QUEUED")) {
+    cancelQueueBots(room.id);
+  }
+
+  broadcastLobby();
+  return true;
+}
+
 function handleReturnToLobby(pid: PlayerId) {
   const roomid = playerRoom.get(pid);
   if (!roomid) return;
@@ -226,7 +249,6 @@ function broadcastRoom(room: GameRoom, msg: ServerMsg) {
     if (ws && ws.readyState === ws.OPEN) ws.send(data);
   }
 }
-
 
 function broadcastRoomState(room: GameRoom, forceFull = false) {
   const nextState = serializeState(room.state);
@@ -291,9 +313,6 @@ function destroyRoomSoon(roomId: RoomId) {
   }
 
   Promise.all(savePromises).then(() => {
-    if (room.privateSettings === null)
-      console.log(`[DATABASE] All player records written successfully for room: ${roomId}`);
-    
     setTimeout(() => {
       const r = rooms.get(roomId);
       if (!r) return;
@@ -483,10 +502,33 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    if (intent.type === "LEAVE_QUEUE") {
+      handlePlayerLeaveRoom(playerId);
+      return;
+    }
+
+    if (intent.type === "SUICIDE") {
+      const rid = playerRoom.get(playerId);
+      if (!rid) return;
+
+      const room = rooms.get(rid);
+      if (!room || !room.state.started) return;
+
+      const player = room.state.players.get(playerId);
+      if (!player || player.status !== "PLAYING" || player.eliminated) return;
+
+      handlePlayerDeath(room.state, playerId);
+      broadcastRoomState(room);
+      return;
+    }
+
     if (intent.type === "CREATE_PRIVATE_ROOM") {
       if (intent.username && intent.username.length > 15) {
         intent.username = intent.username.substring(0, 15);
       }
+      const mapId = typeof intent.mapId === "string"
+        ? intent.mapId.trim().toLowerCase()
+        : undefined;
       try {
         createAndHostPrivateRoom(
           rooms,
@@ -495,6 +537,7 @@ wss.on("connection", (ws, req) => {
           {
             fillWithBots: intent.fillWithBots ?? false,
             maxPlayers: intent.maxPlayers ?? 4,
+            mapId,
           }
         );
       } catch (error) {
@@ -574,6 +617,11 @@ wss.on("connection", (ws, req) => {
 
     const player = room.state.players.get(playerId);
 
+    if (!room.state.started && player?.status === "QUEUED") {
+      handlePlayerLeaveRoom(playerId);
+      return;
+    }
+
     if (player?.status === "PLAYING") {
       handlePlayerDeath(room.state, playerId);
     }
@@ -627,7 +675,7 @@ export function handleJoinPrivateRoom(playerId: PlayerId, username: string, code
     return { success: false, reason: "GAME_ALREADY_STARTED" };
   }
 
-  const color = PLAYER_COLORS[room.state.players.size % PLAYER_COLORS.length];
+  const color = getNextAvailablePlayerColor(room);
 
   setPlayer(room.state, {
     id: playerId,
@@ -715,7 +763,9 @@ export function handlePlayerLeavePrivateRoom(playerId: PlayerId) {
   const wasHost = playerId === room.privateSettings.hostId;
 
   // Remove player from state and trackers
-  handlePlayerDeath(room.state, playerId)
+  if (room.state.started) {
+    handlePlayerDeath(room.state, playerId);
+  }
   room.state.players.delete(playerId);
   room.playerIds.delete(playerId);
   room.matchStats.delete(playerId);
@@ -748,7 +798,7 @@ export function createAndHostPrivateRoom(
   rooms: Map<RoomId, GameRoom>,
   hostPlayerId: PlayerId,
   username: string,
-  options?: { fillWithBots?: boolean; maxPlayers?: number }
+  options?: { fillWithBots?: boolean; maxPlayers?: number; mapId?: string }
 ) {
   if (playerRoom.has(hostPlayerId)) {
     throw new Error("PLAYER_ALREADY_IN_ROOM");
@@ -761,7 +811,7 @@ export function createAndHostPrivateRoom(
     room.privateSettings.hostId = hostPlayerId;
   }
 
-  const color = PLAYER_COLORS[0];
+  const color = getNextAvailablePlayerColor(room);
 
   setPlayer(room.state, {
     id: hostPlayerId,
@@ -805,6 +855,8 @@ export function broadcastPrivateRoomLobby(room: GameRoom) {
         connected: queuedCount(room),
         required: room.maxPlayers,
         code: room.privateSettings.code,
+        mapId: room.privateSettings.mapId,
+        fillWithBots: room.privateSettings.fillWithBots,
         players: playersList,
         isHost: pid === room.privateSettings.hostId
       });

@@ -1,5 +1,5 @@
 import type { CoreGameState, PlayerId, BuildingType, PlayerEffectType } from "../../../shared/index.js";
-import { BUILDING_COST, BUILDING_LIMIT, DEMOLISH_REFUND_RATIO, EFFECT_COSTS, EFFECT_DURATIONS } from "../constants/index.js";
+import { BUILDING_COST, BUILDING_LIMIT, DEMOLISH_REFUND_RATIO, EFFECT_COSTS, EFFECT_DURATIONS } from "../../../shared/constants.js";
 import { clientUIState } from "../state/clientState.js";
 import { toggleBuildMode } from "./buildMode.js";
 import { toggleAbilityMode } from "./abilityMode.js";

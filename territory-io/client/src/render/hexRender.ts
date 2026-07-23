@@ -2,9 +2,9 @@ import type { TileState, PlayerId, BuildingType } from "../../../shared/index.js
 import { canCaptureClient } from "../utils/canCapture.js";
 import { camera } from "./camera.js";
 import { getStripePattern } from "./patterns.js";
-import { FILL_ALPHA } from "../constants/index.js";
+import { FILL_ALPHA } from "../../../shared/constants.js";
 import { darken } from "./playerColors.js";
-import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../constants/index.js";
+import { DEFENSE_HEAT_DECAY_MS, BUILDING_CONSTRUCTION_TIME, BUILDING_DEMOLISH_TIME } from "../../../shared/constants.js";
 import { tileTextures } from "./assetManager.js";
 import { getServerNow } from "../utils/time.js";
 
@@ -462,7 +462,7 @@ export function getTileColor(
   }
 
   if (tile.defense > 1) {
-    if (owner) color = darken(owner.color, 0.6);
+    if (owner) color = darken(owner.color, 0.75);
     else color = "#202020ff";
   }
 

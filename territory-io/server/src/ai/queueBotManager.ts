@@ -4,16 +4,23 @@ import crypto from "node:crypto";
 import type { GameRoom } from "../util/rooms.js";
 import {
   setPlayer,
-  PLAYER_COLORS,
-  STARTING_GOLD,
-  STARTING_ARMY,
   getRandomNames,
-  TIME_TO_AI_AUTOFILL,
 } from "../../../system/index.js";
+import { STARTING_GOLD, STARTING_ARMY } from "../../../shared/constants.js";
+import { TIME_TO_AI_AUTOFILL } from "../../../system/core/serverConstants.js";
 import { broadcastLobby,startMatchIfReady } from "../index.js";
 import { start } from "node:repl";
+import { getNextAvailablePlayerColor } from "../util/playerColors.js";
 
 const queueTimers = new Map<string, NodeJS.Timeout>();
+
+export function cancelQueueBots(roomId: string) {
+  const timer = queueTimers.get(roomId);
+  if (!timer) return;
+
+  clearTimeout(timer);
+  queueTimers.delete(roomId);
+}
 
 export function handleQueueBots(
   room: GameRoom,
@@ -50,11 +57,7 @@ export function fillRoomWithBots(
   let i = 0
   while (room.state.players.size < room.maxPlayers) {
     const botId = `bot_${crypto.randomUUID()}`;
-
-    const color =
-      PLAYER_COLORS[
-        room.state.players.size % PLAYER_COLORS.length
-      ];
+    const color = getNextAvailablePlayerColor(room);
 
     setPlayer(room.state, {
       id: botId,

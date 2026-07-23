@@ -1,7 +1,7 @@
 
 import type { PlayerId, TileState, BuildingType, TileEffectType, TileEffect, PlayerState,
-  PlayerEffectType, PlayerEffect, getTotalPlannedCount, incrementPending, decrementPending,
-  getPendingCount } from "../../shared/index.js";
+  PlayerEffectType, PlayerEffect } from "../../shared/index.js";
+import { calculateCaptureRate } from "../../shared/util.js";
 import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
   HQ_DEFENSE_ADJACENT, HQ_DEFENSE_SELF, GOLD_PER_TILE, BASE_ARMY_MAX, BASE_GOLD_MAX, ARMY_CAP_PER_TILE, CAPTURE_RATE,
   GOLD_PASSIVE, ARMY_PASSIVE, BARRACKS_ARMY_BONUS, DEFEND_COST_RATIO, BUILDING_COST,
@@ -9,7 +9,7 @@ import { BASE_CAPTURE_COST, FORT_DEFENSE_ADJACENT, FORT_DEFENSE_SELF,
   DEFENSE_COST_INCREMENT, TILE_ATTACK_COOLDOWN, BUILDING_LIMIT, HOUSE_ARMY_CAP_BONUS, ARMY_PER_TILE,
   TILES_UNTIL_MAX_ATTACKTIME_INCREASE, MAX_ATTACKTIME_INCREASE, NEUTRAL_TILE_CAPTURE_GOLD,
   PLAYER_KILL_GOLD_REWARD, EFFECT_DURATIONS, EFFECT_STRENGTHS, EFFECT_COSTS, BUILDING_CONSTRUCTION_TIME,
-  BUILDING_DEMOLISH_TIME} from "./constants.js";
+  BUILDING_DEMOLISH_TIME} from "../../shared/constants.js";
 import type { CoreGameState } from "./state.js";
 import { handlePlaceHQ } from "./state.js";
 import { getTile, isAdjacentOwned, key, neighbors, isAdjacentOwnedAndConnected } from "./state.js";
@@ -137,21 +137,25 @@ export function tryCapture(
   const cost = captureCost(tile.defense);
   if (player.army < cost) return false;
 
-  // Pay upfront (important for commitment)
+  // Pay upfront
   modifyPlayerResources(state, player, 'army', -cost);
 
-  // Start capture: track remaining work (1..0) and an estimated completion timestamp
-  // Compute initial rate using current attacker modifiers so we can estimate completion
-  const territorySize = state.connectedCache?.get(playerId)?.size ?? 0;
+  // Compute capture rate using corrected formula
+  const defenderTerritorySize = tile.ownerId 
+    ? (state.connectedCache?.get(tile.ownerId)?.size ?? 0) 
+    : 0;
+
   const attackingPlayer = state.players.get(playerId);
-  const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1;
-  const rate = (CAPTURE_RATE * SPEED_BOOST) / Math.max(1, tile.defense) /
-    (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1);
+  const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") 
+    ? EFFECT_STRENGTHS["ATTACK_SPEED"] 
+    : 1;
+
+  const rate = calculateCaptureRate(tile.defense, defenderTerritorySize, SPEED_BOOST);
   const durationMs = rate > 0 ? (1000 / rate) : Infinity;
 
   tile.capture = {
     by: playerId,
-    remaining: 1, // fraction of work left (1 = just started)
+    remaining: 1, // fraction of work left (1 = 100%)
     cost,
     completeAt: Date.now() + durationMs
   };
@@ -279,14 +283,16 @@ export function tick(state: CoreGameState, dt: number) {
         continue;
       }
 
-      // capture progress (big territory = slower capture)
-      // Use the attacking player's connected tiles for territory size
-      const territorySize: number = state.connectedCache.get(by!)?.size ?? 0;
+      // capture progress (big territory = more time to capture)
+      // Use the defending player's connected tiles for territory size
+      const defenderTerritorySize = t.ownerId 
+        ? (state.connectedCache?.get(t.ownerId)?.size ?? 0) 
+        : 0;
       const attackingPlayer = state.players.get(by!);
       const SPEED_BOOST = hasPlayerEffect(attackingPlayer, "ATTACK_SPEED") ? EFFECT_STRENGTHS["ATTACK_SPEED"] : 1;
 
-      const rate = (CAPTURE_RATE * SPEED_BOOST) / Math.max(1, t.defense) /
-        (Math.min(MAX_ATTACKTIME_INCREASE, territorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE) + 1);
+      // Calculate progress rate using corrected formula
+      const rate = calculateCaptureRate(t.defense, defenderTerritorySize, SPEED_BOOST);
 
       const dec = rate * dt;
       t.capture.remaining = Math.max(0, (t.capture.remaining ?? 1) - dec);
@@ -535,7 +541,6 @@ export function handlePlayerDeath(
 
 export function checkGameOver(state: CoreGameState) {
   let aliveCount = 0;
-  let lastAliveUsername: string | null = null;
   let lastAliveId: string | null = null;
   let realPlayerInRoom = 0;
 
@@ -543,19 +548,18 @@ export function checkGameOver(state: CoreGameState) {
     if (!p.isBot) realPlayerInRoom++;
     if (p.status === "PLAYING" && !p.eliminated) {
       aliveCount += 1;
-      lastAliveUsername = p.username;
       lastAliveId = p.id;
     }
   }
 
-  if (aliveCount <= 1 && lastAliveUsername) {
-    state.gameOver = { winner: lastAliveUsername };
+  if (aliveCount <= 1 && lastAliveId) {
+    state.gameOver = { winner: lastAliveId };
     if (lastAliveId) {
       updatePlayerStat(lastAliveId, "placement", 1);
       updatePlayerStat(lastAliveId, "survivalTimeSeconds", Date.now());
     }
   } else if (realPlayerInRoom <= 0) {
-    state.gameOver = { winner: lastAliveUsername ? lastAliveUsername : "BOTS" };
+    state.gameOver = { winner: lastAliveId ? lastAliveId : "BOTS" };
   }
 }
 

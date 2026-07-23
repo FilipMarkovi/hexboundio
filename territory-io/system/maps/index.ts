@@ -11,6 +11,6 @@ export const MAPS = new Map<string, GameMapDefinition>([
   ["oasis", oasis],
   ["thelakes", thelakes],
   ["greatriver", greatriver]
-]);
+]); // MUST ADD NEW MAPS TO CLIENT LOBBY.TS FILE AS WELL, OTHERWISE THEY WON'T SHOW UP IN THE LOBBY SELECTION
 
 export type MapId = typeof MAPS extends Map<infer K, any> ? K : never;

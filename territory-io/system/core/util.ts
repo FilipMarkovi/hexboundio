@@ -1,4 +1,4 @@
-import { GAMER_NAMES } from "./constants.js";
+import { GAMER_NAMES } from "./serverConstants.js";
 import { key } from "./state.js";
 
 export function getRandomNames(count: number): string[] {

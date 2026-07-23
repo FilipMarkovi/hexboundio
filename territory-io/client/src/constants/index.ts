@@ -1,3 +1,1 @@
-export * from "./game.js"
-export * from "./world.js"
-export * from "./render.js"
+export * from "../../../shared/constants.js"

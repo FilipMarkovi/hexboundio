@@ -1,4 +1,5 @@
 import type { CoreGameState, PlayerId, BuildingType } from "./gameTypes.js"; 
+import { CAPTURE_RATE, MAX_ATTACKTIME_INCREASE, TILES_UNTIL_MAX_ATTACKTIME_INCREASE } from "./index.js";
 
 function createZeroedBuildingCounts() {
   return {
@@ -52,4 +53,24 @@ export function decrementPending(playerId: PlayerId, type: BuildingType): void {
 
 export function clearPendingTracker(playerId: PlayerId): void {
   pendingQueueMap.delete(playerId);
+}
+
+export function calculateCaptureRate(
+  tileDefense: number,
+  targetTerritorySize: number, // Territory size of the player who OWNS the tile
+  speedBoost: number
+): number {
+  // Base time in seconds (Defense divided by CAPTURE_RATE constant)
+  const baseSeconds = Math.max(1, tileDefense) / CAPTURE_RATE;
+
+  // Extra time based on the TARGET'S territory (max 1s penalty at 45+ tiles)
+  // If neutral tile (owner is null/undefined), targetTerritorySize is 0 → extraSeconds = 0
+  const territoryRatio = Math.min(1.0, targetTerritorySize / TILES_UNTIL_MAX_ATTACKTIME_INCREASE);
+  const extraSeconds = territoryRatio * MAX_ATTACKTIME_INCREASE; // MAX_ATTACKTIME_INCREASE = 1.0
+
+  // Apply attack speed buff of the ATTACKER (divides overall duration)
+  const totalDurationSeconds = (baseSeconds + extraSeconds) / Math.max(0.1, speedBoost);
+
+  // Rate = fraction of work completed per second
+  return totalDurationSeconds > 0 ? (1 / totalDurationSeconds) : 0;
 }

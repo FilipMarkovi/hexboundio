@@ -24,5 +24,5 @@ export const oasis = asciiToGameMap(
     . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
   `,
   "Oasis",
-  6
+  10
 );

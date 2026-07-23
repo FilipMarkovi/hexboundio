@@ -1,4 +1,5 @@
-import { CoreGameState, MAPS, ROOM_CODE_LENGTH } from "../../../system/index.js";
+import { CoreGameState, MAPS } from "../../../system/index.js";
+import { MIN_PRIVATE_ROOM_PLAYERS, MAX_PRIVATE_ROOM_PLAYERS, ROOM_CODE_LENGTH } from "../../../shared/constants.js";
 import { PlayerId, WireState } from "../../../shared/index.js";
 import crypto from "node:crypto";
 import { createGameState, setPlayer } from "../../../system/index.js";
@@ -22,6 +23,7 @@ export interface RoomSettings {
   code: string;           
   fillWithBots: boolean;
   maxPlayers: number;
+  mapId: string;
   hostId: PlayerId;
 }
 
@@ -55,7 +57,7 @@ const MAP_POOL: WeightedMap[] =
 
 // override weights
 const EXTRA_WEIGHTS: Record<string, number> = {
-  greatriver: 10000,
+  //greatriver: 10000,
 };
 
 for (const m of MAP_POOL) {
@@ -136,18 +138,26 @@ function generateRoomCode(length = ROOM_CODE_LENGTH): string {
 }
 
 
-export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fillWithBots?: boolean; maxPlayers?: number }): GameRoom {
+export function createPrivateRoom(
+  rooms: Map<RoomId, GameRoom>,
+  options?: { fillWithBots?: boolean; maxPlayers?: number; mapId?: string }
+): GameRoom {
   const roomCode = generateRoomCode();
   const id = crypto.randomUUID();
 
-  const mapId = pickWeightedMapId();
+  const requestedMapId = options?.mapId;
+  if (requestedMapId && !MAPS.has(requestedMapId)) {
+    throw new Error("Invalid mapId value");
+  }
+
+  const mapId = requestedMapId ?? pickWeightedMapId();
   const map = MAPS.get(mapId);
 
   if (!map) {
     throw new Error(`Map not found: ${mapId}`);
   }
 
-  if (options?.maxPlayers && (options.maxPlayers < 2 || options.maxPlayers > 8)) {
+  if (options?.maxPlayers && (options.maxPlayers < MIN_PRIVATE_ROOM_PLAYERS || options.maxPlayers > MAX_PRIVATE_ROOM_PLAYERS)) {
     throw new Error("Invalid maxPlayers value");
   }
 
@@ -167,6 +177,7 @@ export function createPrivateRoom(rooms: Map<RoomId, GameRoom>, options?: { fill
       code: roomCode,
       fillWithBots: options?.fillWithBots ?? false,
       maxPlayers: options?.maxPlayers ?? 4,
+      mapId,
       hostId: "",  // gets set later
     },
   };

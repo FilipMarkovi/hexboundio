@@ -33,5 +33,5 @@ export const greatriver = asciiToGameMap(
      . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
   `,
   "The Great River",
-  10
+  16
 );

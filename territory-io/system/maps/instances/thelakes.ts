@@ -31,5 +31,5 @@ export const thelakes = asciiToGameMap(
      . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
   `,
   "The Lakes",
-  10
+  16
 );
